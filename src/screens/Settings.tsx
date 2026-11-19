@@ -4,6 +4,7 @@ import { api } from '../lib/ipc'
 import type { JavaList } from '../lib/types'
 import { formatMemory } from '../lib/format'
 import { IconCoffee, IconDownload, IconFolder } from '../components/Icons'
+import { SharedSkinsSettings } from '../components/SharedSkinsSettings'
 
 const JAVA_FOR: Record<number, string> = {
   25: 'Minecraft 26.1 и новее',
@@ -120,7 +121,7 @@ export function Settings() {
           <label className="switch">
             <input
               type="checkbox"
-              checked={prefs.discord}
+              checked={prefs.discord && discordReady}
               disabled={!discordReady}
               onChange={(e) => {
                 setPrefs({ discord: e.target.checked })
@@ -131,6 +132,8 @@ export function Settings() {
           </label>
         </div>
       </section>
+
+      <SharedSkinsSettings />
 
       <section className="settings-block">
         <div className="settings-title">

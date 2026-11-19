@@ -26,6 +26,8 @@ pub struct AccountView {
     pub kind: AccountKind,
     pub active: bool,
     pub skin_url: Option<String>,
+    /// Офлайн-скин из библиотеки (data URL) — для аватара
+    pub offline_skin: Option<String>,
 }
 
 fn view(a: Account, active: &Option<String>) -> AccountView {
@@ -35,6 +37,11 @@ fn view(a: Account, active: &Option<String>) -> AccountView {
         username: a.username,
         uuid: a.uuid,
         kind: a.kind,
+        offline_skin: a
+            .offline_skin
+            .as_deref()
+            .and_then(|id| crate::commands::skins::library_skin_bytes(id).ok())
+            .map(|b| format!("data:image/png;base64,{}", base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b))),
         skin_url: a.skin_url,
     }
 }

@@ -49,11 +49,35 @@ impl Default for AccountId {
     }
 }
 
+/// Содержимое хранилища
+#[derive(Default, Serialize, Deserialize)]
+struct VaultData {
+    #[serde(default)]
+    tokens: HashMap<String, TokenBundle>,
+    /// Прочие секреты (например, ключи владения ником на сервере скинов)
+    #[serde(default)]
+    secrets: HashMap<String, String>,
+}
+
+impl VaultData {
+    /// Совместимость: раньше файл был просто картой account_id → токены
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        let value: serde_json::Value = serde_json::from_slice(bytes)?;
+        let is_new = value.get("tokens").is_some_and(|v| v.is_object())
+            || value.get("secrets").is_some_and(|v| v.is_object());
+        if is_new {
+            Ok(serde_json::from_value(value)?)
+        } else {
+            Ok(Self { tokens: serde_json::from_value(value)?, secrets: HashMap::new() })
+        }
+    }
+}
+
 /// Зашифрованное хранилище токенов
 pub struct SecretsVault {
     path: PathBuf,
     master_key: [u8; 32],
-    cache: RwLock<HashMap<String, TokenBundle>>,
+    cache: RwLock<VaultData>,
 }
 
 impl Drop for SecretsVault {
@@ -78,7 +102,7 @@ impl SecretsVault {
                 // Повреждённое хранилище не должно ломать запуск — откладываем его в сторону
                 log::error!("Хранилище секретов не читается ({e}), создаю новое");
                 let _ = std::fs::rename(&path, path.with_extension("bin.broken"));
-                HashMap::new()
+                VaultData::default()
             }
         };
 
@@ -89,13 +113,13 @@ impl SecretsVault {
         }))
     }
 
-    fn read_file(path: &Path, key: &[u8; 32]) -> Result<HashMap<String, TokenBundle>> {
+    fn read_file(path: &Path, key: &[u8; 32]) -> Result<VaultData> {
         if !path.exists() {
-            return Ok(HashMap::new());
+            return Ok(VaultData::default());
         }
         let data = std::fs::read(path)?;
         if data.is_empty() {
-            return Ok(HashMap::new());
+            return Ok(VaultData::default());
         }
         if data.len() < 12 {
             anyhow::bail!("Некорректный файл хранилища");
@@ -104,7 +128,7 @@ impl SecretsVault {
         let mut plaintext = cipher
             .decrypt(Nonce::from_slice(&data[..12]), &data[12..])
             .map_err(|_| anyhow::anyhow!("Не удалось расшифровать хранилище"))?;
-        let entries = serde_json::from_slice(&plaintext);
+        let entries = VaultData::parse(&plaintext);
         plaintext.zeroize();
         Ok(entries?)
     }
@@ -136,18 +160,18 @@ impl SecretsVault {
 
     /// Сохранить токены аккаунта
     pub async fn store_token(&self, account_id: &AccountId, token: TokenBundle) -> Result<()> {
-        self.cache.write().await.insert(account_id.0.clone(), token);
+        self.cache.write().await.tokens.insert(account_id.0.clone(), token);
         self.save().await
     }
 
     /// Получить токены аккаунта
     pub async fn get_token(&self, account_id: &AccountId) -> Result<Option<TokenBundle>> {
-        Ok(self.cache.read().await.get(&account_id.0).cloned())
+        Ok(self.cache.read().await.tokens.get(&account_id.0).cloned())
     }
 
     /// Удалить токены аккаунта
     pub async fn remove_account(&self, account_id: &AccountId) -> Result<()> {
-        let removed = self.cache.write().await.remove(&account_id.0).is_some();
+        let removed = self.cache.write().await.tokens.remove(&account_id.0).is_some();
         if removed {
             self.save().await?;
         }
@@ -156,8 +180,22 @@ impl SecretsVault {
 
     /// Очистить хранилище
     pub async fn clear(&self) -> Result<()> {
-        self.cache.write().await.clear();
+        let mut c = self.cache.write().await;
+        c.tokens.clear();
+        c.secrets.clear();
+        drop(c);
         self.save().await
+    }
+
+    /// Сохранить произвольный секрет
+    pub async fn set_secret(&self, key: &str, value: String) -> Result<()> {
+        self.cache.write().await.secrets.insert(key.to_string(), value);
+        self.save().await
+    }
+
+    /// Прочитать произвольный секрет
+    pub async fn get_secret(&self, key: &str) -> Option<String> {
+        self.cache.read().await.secrets.get(key).cloned()
     }
 }
 
@@ -287,5 +325,20 @@ mod tests {
         let token = vault.get_token(&id).await.unwrap().unwrap();
         assert_eq!(token.mc_access_token, "a");
         assert_eq!(token.mc_expires_at, 42);
+
+        vault.set_secret("skin-claim:steve", "k".into()).await.unwrap();
+        let reopened = SecretsVault::open(dir.path()).unwrap();
+        assert_eq!(reopened.get_secret("skin-claim:steve").await.as_deref(), Some("k"));
+        assert!(reopened.get_token(&id).await.unwrap().is_some());
+    }
+
+    #[test]
+    fn parses_legacy_vault_format() {
+        let legacy = br#"{"acc-1":{"ms_refresh_token":"r","mc_access_token":"a","mc_expires_at":1}}"#;
+        let d = VaultData::parse(legacy).unwrap();
+        assert_eq!(d.tokens["acc-1"].mc_access_token, "a");
+        assert!(d.secrets.is_empty());
+        let new = br#"{"tokens":{},"secrets":{"k":"v"}}"#;
+        assert_eq!(VaultData::parse(new).unwrap().secrets["k"], "v");
     }
 }

@@ -23,6 +23,7 @@ pub mod safepath;
 // pub mod selfdelta;
 // pub mod selfheal;
 pub mod selfupdate;
+pub mod settings;
 pub mod silentupdate;
 pub mod store_index;
 pub mod ui_text;

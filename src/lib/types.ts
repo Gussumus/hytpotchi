@@ -66,6 +66,18 @@ export interface SkinProfile {
   skin: string | null
   variant: 'classic' | 'slim'
   capes: CapeView[]
+  shared?: SharedStatus
+}
+
+export interface SharedStatus {
+  state: 'published' | 'failed' | 'not_configured'
+  message: string
+}
+
+export interface SharedSkins {
+  enabled: boolean
+  customServer: string | null
+  server: string | null
 }
 
 export interface LibrarySkin {
@@ -82,6 +94,7 @@ export interface Account {
   kind: 'microsoft' | 'offline'
   active: boolean
   skinUrl: string | null
+  offlineSkin?: string | null
 }
 
 export interface DeviceCode {

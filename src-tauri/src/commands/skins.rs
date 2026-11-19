@@ -12,6 +12,8 @@ use crate::engine::accounts::session::{AccountKind, AccountStore};
 use crate::engine::accounts::vault::{TokenVault, game_session};
 use crate::engine::core::http::HttpClient;
 use crate::engine::core::paths::app_dir;
+use crate::engine::core::settings::{self, LauncherSettings};
+use crate::engine::skins::shared;
 
 const PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
 
@@ -49,7 +51,7 @@ async fn token(
 ) -> Result<String> {
     let account = store.get(account_id).context("Аккаунт не найден")?;
     if account.kind == AccountKind::Offline {
-        bail!("Скины и плащи доступны только для аккаунтов Microsoft");
+        bail!("Плащи и загрузка скина на серверы Mojang доступны только для аккаунтов Microsoft");
     }
     Ok(game_session(http, vault, store, &account).await?.access_token)
 }
@@ -100,6 +102,9 @@ pub struct SkinProfile {
     /// classic | slim
     pub variant: String,
     pub capes: Vec<CapeView>,
+    /// Результат публикации офлайн-скина на общий сервер
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shared: Option<SharedStatus>,
 }
 
 async fn fetch_png(http: &HttpClient, url: &str) -> Option<String> {
@@ -138,7 +143,41 @@ async fn load_profile(http: &HttpClient, token: &str) -> Result<SkinProfile> {
             .unwrap_or_else(|| "CLASSIC".into())
             .to_lowercase(),
         capes,
+        shared: None,
     })
+}
+
+/// PNG скина из библиотеки
+pub fn library_skin_bytes(skin_id: &str) -> Result<Vec<u8>> {
+    if skin_id.is_empty() || !skin_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+        bail!("Неверный скин");
+    }
+    Ok(std::fs::read(library_dir()?.join(format!("{skin_id}.png")))?)
+}
+
+/// Профиль офлайн-аккаунта: скин из библиотеки, плащей нет
+fn offline_profile(account: &crate::engine::accounts::session::Account) -> SkinProfile {
+    let skin = account
+        .offline_skin
+        .as_deref()
+        .and_then(|id| library_skin_bytes(id).ok())
+        .map(|b| data_url(&b));
+    SkinProfile {
+        username: account.username.clone(),
+        uuid: account.uuid.clone(),
+        variant: if skin.is_some() {
+            account.offline_variant.clone().unwrap_or_else(|| "classic".into())
+        } else {
+            "classic".into()
+        },
+        skin,
+        capes: vec![],
+        shared: None,
+    }
+}
+
+fn offline_account(store: &AccountStore, account_id: &str) -> Option<crate::engine::accounts::session::Account> {
+    store.get(account_id).filter(|a| a.kind == AccountKind::Offline)
 }
 
 #[command]
@@ -148,6 +187,9 @@ pub async fn skin_profile(
     store: State<'_, AccountStore>,
     account_id: String,
 ) -> CmdResult<SkinProfile> {
+    if let Some(account) = offline_account(&store, &account_id) {
+        return Ok(offline_profile(&account));
+    }
     let token = token(&http, &vault, &store, &account_id).await.map_err(err)?;
     load_profile(&http, &token).await.map_err(err)
 }
@@ -273,6 +315,26 @@ pub async fn skin_apply(
     let dir = library_dir().map_err(err)?;
     let meta = library_meta(&dir).into_iter().find(|s| s.id == skin_id).ok_or("Скин не найден")?;
     let bytes = std::fs::read(dir.join(format!("{skin_id}.png"))).map_err(|e| e.to_string())?;
+
+    // Офлайн: запоминаем выбор, скин подхватит CustomSkinLoader при запуске
+    if offline_account(&store, &account_id).is_some() {
+        let variant = variant.unwrap_or(meta.variant);
+        let slim = variant == "slim";
+        let account = store
+            .set_offline_skin(&account_id, Some((skin_id, variant)))
+            .map_err(err)?;
+        let mut profile = offline_profile(&account);
+        // Публикуем на общий сервер, чтобы скин видели другие игроки Hytpotchi
+        profile.shared = Some(match crate::engine::core::settings::skin_server() {
+            Some(server) => match shared::publish(&http, &vault, &server, &account.username, bytes, slim).await {
+                Ok(()) => SharedStatus::published(),
+                Err(e) => SharedStatus::failed(format!("{e:#}")),
+            },
+            None => SharedStatus::not_configured(),
+        });
+        return Ok(profile);
+    }
+
     let token = token(&http, &vault, &store, &account_id).await.map_err(err)?;
     upload(&http, &token, bytes, variant.as_deref().unwrap_or(&meta.variant))
         .await
@@ -288,6 +350,15 @@ pub async fn skin_reset(
     store: State<'_, AccountStore>,
     account_id: String,
 ) -> CmdResult<SkinProfile> {
+    if offline_account(&store, &account_id).is_some() {
+        let account = store.set_offline_skin(&account_id, None).map_err(err)?;
+        if let Some(server) = crate::engine::core::settings::skin_server() {
+            if let Err(e) = shared::unpublish(&http, &vault, &server, &account.username).await {
+                log::warn!("Не удалось убрать скин с сервера: {e:#}");
+            }
+        }
+        return Ok(offline_profile(&account));
+    }
     let token = token(&http, &vault, &store, &account_id).await.map_err(err)?;
     http.client
         .delete(format!("{PROFILE}/skins/active"))
@@ -336,6 +407,87 @@ pub async fn skin_save_current(
     let b64 = image.trim_start_matches("data:image/png;base64,");
     let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| e.to_string())?;
     add_to_library(&bytes, &profile.username, &profile.variant).map_err(err)
+}
+
+// ---------- Общие офлайн-скины ----------
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedStatus {
+    /// published | failed | not_configured
+    pub state: String,
+    pub message: String,
+}
+
+impl SharedStatus {
+    fn published() -> Self {
+        Self { state: "published".into(), message: "Скин опубликован — его видят другие игроки Hytpotchi".into() }
+    }
+    fn failed(message: String) -> Self {
+        Self { state: "failed".into(), message: format!("Скин надет только у вас: {message}") }
+    }
+    fn not_configured() -> Self {
+        Self {
+            state: "not_configured".into(),
+            message: "Скин надет только у вас: сервер скинов не настроен (Настройки → Общие скины)".into(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedSkinsView {
+    pub enabled: bool,
+    /// Адрес из настроек (пусто — используется встроенный)
+    pub custom_server: Option<String>,
+    /// Итоговый адрес, которым пользуется лаунчер
+    pub server: Option<String>,
+}
+
+#[command]
+pub async fn shared_skins_get() -> CmdResult<SharedSkinsView> {
+    let s = settings::load();
+    Ok(SharedSkinsView { enabled: s.shared_skins, custom_server: s.skin_server.clone(), server: settings::skin_server() })
+}
+
+/// Сохранить настройки общих скинов (адрес проверяется перед сохранением)
+#[command]
+pub async fn shared_skins_set(
+    http: State<'_, HttpClient>,
+    enabled: bool,
+    server: Option<String>,
+) -> CmdResult<SharedSkinsView> {
+    let server = match server.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+        Some(url) => {
+            let url = settings::normalize_server(&url).map_err(err)?;
+            shared::check(&http, &url).await.map_err(err)?;
+            Some(url)
+        }
+        None => None,
+    };
+    settings::save(&LauncherSettings { skin_server: server, shared_skins: enabled }).map_err(err)?;
+    shared_skins_get().await
+}
+
+/// Опубликовать текущий офлайн-скин заново (например, после настройки сервера)
+#[command]
+pub async fn skin_publish(
+    http: State<'_, HttpClient>,
+    vault: State<'_, TokenVault>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+) -> CmdResult<SharedStatus> {
+    let account = offline_account(&store, &account_id).ok_or("Публикация нужна только офлайн-аккаунтам")?;
+    let skin_id = account.offline_skin.clone().ok_or("Сначала наденьте скин")?;
+    let bytes = library_skin_bytes(&skin_id).map_err(err)?;
+    let slim = account.offline_variant.as_deref() == Some("slim");
+    Ok(match settings::skin_server() {
+        Some(server) => match shared::publish(&http, &vault, &server, &account.username, bytes, slim).await {
+            Ok(()) => SharedStatus::published(),
+            Err(e) => SharedStatus::failed(format!("{e:#}")),
+        },
+        None => SharedStatus::not_configured(),
+    })
 }
 
 #[cfg(test)]

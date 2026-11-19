@@ -15,6 +15,8 @@ import type {
   ServerStatus,
   SkinProfile,
   LibrarySkin,
+  SharedSkins,
+  SharedStatus,
   Instance,
   InstancePatch,
   JavaList,
@@ -160,6 +162,9 @@ export const api = {
   skinReset: (accountId: string) => call<SkinProfile>('skin_reset', { accountId }),
   skinSaveCurrent: (accountId: string) => call<LibrarySkin>('skin_save_current', { accountId }),
   capeSet: (accountId: string, capeId: string | null) => call<SkinProfile>('cape_set', { accountId, capeId }),
+  sharedSkinsGet: () => call<SharedSkins>('shared_skins_get'),
+  sharedSkinsSet: (enabled: boolean, server: string | null) => call<SharedSkins>('shared_skins_set', { enabled, server }),
+  skinPublish: (accountId: string) => call<SharedStatus>('skin_publish', { accountId }),
 }
 
 export async function showWindow(visible: boolean) {

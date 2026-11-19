@@ -226,3 +226,24 @@
     grid-template-columns: 1fr;
   }
 }
+
+.info-box.left {
+  text-align: left;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.shared-status {
+  font-weight: 600;
+}
+.shared-status.published {
+  color: var(--mint);
+}
+.shared-status.failed,
+.shared-status.not_configured {
+  color: var(--warn);
+}
+.info-box.left .btn {
+  align-self: flex-start;
+  margin-top: 6px;
+}

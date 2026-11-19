@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { activeAccount, useStore } from '../store'
 import { api } from '../lib/ipc'
-import type { LibrarySkin, SkinProfile } from '../lib/types'
+import type { LibrarySkin, SharedStatus, SkinProfile } from '../lib/types'
 import { SkinPreview } from '../components/SkinPreview'
 import { IconCheck, IconPlus, IconShirt, IconTrash, IconUpload } from '../components/Icons'
 
@@ -14,7 +14,8 @@ export function Skins() {
   const [library, setLibrary] = useState<LibrarySkin[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [variant, setVariant] = useState<'classic' | 'slim'>('classic')
-  const isMicrosoft = account?.kind === 'microsoft'
+  const [shared, setShared] = useState<SharedStatus | null>(null)
+  const isOffline = account?.kind === 'offline'
 
   const loadLibrary = useCallback(() => {
     api.skinLibrary().then(setLibrary).catch(() => setLibrary([]))
@@ -24,7 +25,7 @@ export function Skins() {
     loadLibrary()
     setProfile(null)
     setProfileError(null)
-    if (account && isMicrosoft) {
+    if (account) {
       api
         .skinProfile(account.id)
         .then((p) => {
@@ -33,13 +34,14 @@ export function Skins() {
         })
         .catch((e) => setProfileError((e as Error).message))
     }
-  }, [account, isMicrosoft, loadLibrary])
+  }, [account, loadLibrary])
 
   async function run<T>(key: string, fn: () => Promise<T>, ok?: string) {
     setBusy(key)
     try {
       const result = await fn()
       if (ok) toast('success', ok)
+      useStore.getState().refreshAccounts()
       return result
     } catch (e) {
       toast('error', (e as Error).message)
@@ -56,7 +58,7 @@ export function Skins() {
       <div className="page-head">
         <div>
           <h1>Скины</h1>
-          <p className="muted">Библиотека скинов и плащи аккаунта Microsoft</p>
+          <p className="muted">Библиотека скинов, офлайн-скины и плащи Microsoft</p>
         </div>
         <button
           className="btn primary"
@@ -72,7 +74,7 @@ export function Skins() {
 
       <div className="skins-layout">
         <section className="skin-stage">
-          {isMicrosoft ? (
+          {account ? (
             profile ? (
               <>
                 <div className="skin-stage-preview">
@@ -84,10 +86,32 @@ export function Skins() {
                     {profile.skin ? (profile.variant === 'slim' ? 'Тонкие руки (Alex)' : 'Классическая модель (Steve)') : 'Стандартный скин'}
                   </span>
                 </div>
+                {isOffline && (
+                  <div className="info-box left">
+                    <strong>Офлайн-скин для всех игроков Hytpotchi</strong>
+                    <span>
+                      «Надеть» публикует скин на общий сервер скинов, и его видят все, кто играет через Hytpotchi. Работает
+                      в сборках с Fabric, Forge, NeoForge или Quilt: нужный мод лаунчер ставит сам.
+                    </span>
+                    {shared && <span className={`shared-status ${shared.state}`}>{shared.message}</span>}
+                    {profile.skin && (
+                      <button
+                        className="btn ghost sm"
+                        disabled={busy !== null}
+                        onClick={async () => {
+                          const st = await run('publish', () => api.skinPublish(account!.id))
+                          if (st) setShared(st)
+                        }}
+                      >
+                        <IconUpload size={14} /> Опубликовать ещё раз
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="row">
                   <button
                     className="btn ghost sm"
-                    disabled={busy !== null || !profile.skin}
+                    disabled={busy !== null || !profile.skin || isOffline}
                     onClick={async () => {
                       const s = await run('save', () => api.skinSaveCurrent(account!.id), 'Скин сохранён в библиотеку')
                       if (s) loadLibrary()
@@ -150,10 +174,10 @@ export function Skins() {
             <div className="empty-state small">
               <IconShirt size={34} />
               <p className="muted">
-                Менять скин и плащ на серверах можно только с аккаунтом Microsoft. Библиотека скинов работает и без него.
+                Добавьте аккаунт — Microsoft или офлайн, — чтобы надеть скин.
               </p>
               <button className="btn primary" onClick={() => setScreen('accounts')}>
-                Войти через Microsoft
+                Добавить аккаунт
               </button>
             </div>
           )}
@@ -184,11 +208,19 @@ export function Skins() {
                 <div className="row">
                   <button
                     className="btn primary sm"
-                    disabled={!isMicrosoft || busy !== null}
-                    title={isMicrosoft ? 'Надеть' : 'Нужен аккаунт Microsoft'}
+                    disabled={!account || busy !== null}
+                    title="Надеть"
                     onClick={async () => {
-                      const p = await run(s.id, () => api.skinApply(account!.id, s.id, variant), `Скин «${s.name}» надет`)
-                      if (p) setProfile(p)
+                      const p = await run(s.id, () => api.skinApply(account!.id, s.id, variant))
+                      if (p) {
+                        setProfile(p)
+                        if (p.shared) {
+                          setShared(p.shared)
+                          toast(p.shared.state === 'published' ? 'success' : 'info', p.shared.message)
+                        } else {
+                          toast('success', `Скин «${s.name}» надет`)
+                        }
+                      }
                     }}
                   >
                     {busy === s.id ? <span className="spinner xs dark" /> : <IconCheck size={13} />} Надеть

@@ -14,7 +14,9 @@ use crate::engine::game::install::{
 use crate::engine::game::java::{ensure_java, normalize_major};
 use crate::engine::game::loaders::{self, ForgeKind};
 use crate::engine::game::manifest::resolve_version;
+use crate::engine::accounts::session::AccountKind;
 use crate::engine::game::now_playing::discord;
+use crate::engine::skins::offline as offline_skin;
 use crate::engine::game::pipeline::plan::{LaunchContext, plan_launch};
 use crate::engine::game::pipeline::start::start_game;
 use crate::engine::game::pipeline::watch::{GameLogEvent, GameWatcher};
@@ -162,6 +164,52 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
     let accounts = app.state::<AccountStore>();
     let account = require(accounts.active())?;
     let session = game_session(&http, &vault, &accounts, &account).await?;
+
+    // Скины через CustomSkinLoader (только в сборках с загрузчиком):
+    // свой офлайн-скин + скины других игроков Hytpotchi с общего сервера
+    {
+        let game_dir = instance_game_dir(instance_id)?;
+        let settings = crate::engine::core::settings::load();
+        let server = settings
+            .shared_skins
+            .then(crate::engine::core::settings::skin_server)
+            .flatten();
+        let own_skin = if account.kind == AccountKind::Offline {
+            account
+                .offline_skin
+                .as_deref()
+                .and_then(|id| crate::commands::skins::library_skin_bytes(id).ok())
+        } else {
+            None
+        };
+        if account.kind == AccountKind::Offline && own_skin.is_none() {
+            offline_skin::clear(&game_dir, &account.username);
+        }
+
+        match &instance.loader {
+            Some(_) if own_skin.is_some() || server.is_some() => {
+                let result = async {
+                    if crate::commands::content::ensure_project(&http, &instance, offline_skin::CSL_PROJECT).await? {
+                        console("Установлен CustomSkinLoader — он показывает офлайн-скины игроков Hytpotchi".into());
+                    }
+                    let own = own_skin.as_deref().map(|png| offline_skin::OwnSkin {
+                        username: &account.username,
+                        png,
+                        slim: account.offline_variant.as_deref() == Some("slim"),
+                    });
+                    offline_skin::configure(&game_dir, own, server.as_deref())
+                }
+                .await;
+                if let Err(e) = result {
+                    console(format!("Скины не настроены: {e:#}"));
+                }
+            }
+            None if own_skin.is_some() => console(
+                "Офлайн-скин работает только в сборках с загрузчиком (Fabric, Forge, NeoForge или Quilt)".into(),
+            ),
+            _ => {}
+        }
+    }
 
     // 7. План и запуск
     emit("starting", 0, 1);

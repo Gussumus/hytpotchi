@@ -132,6 +132,9 @@ pub fn run() {
             commands::skins::skin_reset,
             commands::skins::skin_save_current,
             commands::skins::cape_set,
+            commands::skins::shared_skins_get,
+            commands::skins::shared_skins_set,
+            commands::skins::skin_publish,
             // Облако
             commands::cloud::sync_push,
             commands::cloud::sync_pull,

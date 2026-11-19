@@ -67,6 +67,9 @@ let instances: Instance[] = [
   },
 ]
 
+let sharedServer: string | null = null
+let sharedEnabled = true
+
 let accounts: Account[] = [
   { id: 'acc-1', username: 'Hytpotchi', uuid: 'b50ad385829d3141a2167e7d7539ba7f', kind: 'offline', active: true, skinUrl: null },
 ]
@@ -202,7 +205,7 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
     case 'game_logs':
       return r([])
     case 'account_list':
-      return r(accounts)
+      return r(accounts.map((a) => ({ ...a })))
     case 'account_add_offline': {
       const acc: Account = { id: `acc-${Date.now()}`, username: String(args.username), uuid: '00000000000030008000000000000000', kind: 'offline', active: true, skinUrl: null }
       accounts = [...accounts.map((a) => ({ ...a, active: false })), acc]
@@ -298,7 +301,36 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
     case 'instance_clear_cover':
       return r(instances.find((i) => i.id === args.id) ?? null)
     case 'skin_profile':
-      throw new Error('Скины и плащи доступны только для аккаунтов Microsoft')
+    case 'skin_reset': {
+      const acc = accounts.find((a) => a.id === args.accountId)
+      if (cmd === 'skin_reset' && acc) acc.offlineSkin = null
+      return r({ username: acc?.username ?? 'Игрок', uuid: acc?.uuid ?? '', skin: acc?.offlineSkin ?? null, variant: 'classic', capes: [] })
+    }
+    case 'shared_skins_get':
+      return r({ enabled: sharedEnabled, customServer: sharedServer, server: sharedServer })
+    case 'shared_skins_set': {
+      await sleep(500)
+      const url = args.server ? String(args.server).replace(/\/+$/, '') : null
+      if (url && !url.startsWith('https://')) throw new Error('Адрес сервера скинов должен начинаться с https://')
+      sharedServer = url
+      sharedEnabled = Boolean(args.enabled)
+      return mockCall<T>('shared_skins_get')
+    }
+    case 'skin_publish':
+      await sleep(400)
+      return r(
+        sharedServer
+          ? { state: 'published', message: 'Скин опубликован — его видят другие игроки Hytpotchi' }
+          : { state: 'not_configured', message: 'Скин надет только у вас: сервер скинов не настроен (Настройки → Общие скины)' },
+      )
+    case 'skin_apply': {
+      const lib = await mockCall<{ id: string; image: string }[]>('skin_library')
+      const acc = accounts.find((a) => a.id === args.accountId)
+      if (acc) acc.offlineSkin = lib.find((s) => s.id === args.skinId)?.image ?? null
+      const profile = await mockCall<object>('skin_profile', { accountId: args.accountId })
+      const shared = await mockCall<object>('skin_publish', {})
+      return r({ ...profile, shared })
+    }
     case 'skin_library': {
       // Простой тестовый скин 64×64, нарисованный на лету
       const c = document.createElement('canvas')

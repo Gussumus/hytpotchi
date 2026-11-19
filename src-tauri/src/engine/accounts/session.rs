@@ -25,6 +25,12 @@ pub struct Account {
     pub added_at: String,
     #[serde(default)]
     pub skin_url: Option<String>,
+    /// Офлайн: id скина из библиотеки (показывается через CustomSkinLoader)
+    #[serde(default)]
+    pub offline_skin: Option<String>,
+    /// Офлайн: classic | slim
+    #[serde(default)]
+    pub offline_variant: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -83,6 +89,11 @@ impl AccountStore {
         {
             account.id = existing.id.clone();
             account.added_at = existing.added_at.clone();
+            // Повторный вход не должен сбрасывать выбранный офлайн-скин
+            if account.offline_skin.is_none() {
+                account.offline_skin = existing.offline_skin.clone();
+                account.offline_variant = existing.offline_variant.clone();
+            }
             *existing = account.clone();
         } else {
             d.accounts.push(account.clone());
@@ -99,6 +110,25 @@ impl AccountStore {
             d.active = d.accounts.first().map(|a| a.id.clone());
         }
         self.persist(&d)
+    }
+
+    /// Выбрать скин из библиотеки для офлайн-аккаунта (`None` — стандартный)
+    pub fn set_offline_skin(&self, id: &str, skin: Option<(String, String)>) -> Result<Account> {
+        let mut d = self.data.write();
+        let account = d.accounts.iter_mut().find(|a| a.id == id).context("Аккаунт не найден")?;
+        match skin {
+            Some((skin_id, variant)) => {
+                account.offline_skin = Some(skin_id);
+                account.offline_variant = Some(variant);
+            }
+            None => {
+                account.offline_skin = None;
+                account.offline_variant = None;
+            }
+        }
+        let updated = account.clone();
+        self.persist(&d)?;
+        Ok(updated)
     }
 
     pub fn set_active(&self, id: &str) -> Result<()> {
@@ -136,6 +166,8 @@ pub fn new_account(username: &str, uuid: &str, kind: AccountKind, skin: Option<S
         kind,
         added_at: chrono::Utc::now().to_rfc3339(),
         skin_url: skin,
+        offline_skin: None,
+        offline_variant: None,
     }
 }
 

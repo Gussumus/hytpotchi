@@ -1,2 +1,4 @@
-// Stub for skins module
-pub fn init() {}
+//! Скины
+
+pub mod offline;
+pub mod shared;

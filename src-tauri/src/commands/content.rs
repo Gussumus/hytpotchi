@@ -619,3 +619,14 @@ pub async fn content_check_updates(
     updates.sort_by_key(|u| u.title.to_lowercase());
     Ok(updates)
 }
+
+/// Поставить проект в сборку, если его там ещё нет (используется лаунчером, например для CustomSkinLoader)
+pub async fn ensure_project(http: &HttpClient, instance: &Instance, project_id: &str) -> Result<bool> {
+    let mut index = load_index(&instance.id);
+    if index.entries.contains_key(project_id) {
+        return Ok(false);
+    }
+    let installed = install_project(http, instance, &mut index, project_id, 0).await?;
+    save_index(&instance.id, &index)?;
+    Ok(!installed.is_empty())
+}
