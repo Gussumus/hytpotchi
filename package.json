@@ -18,6 +18,7 @@
     "lucide-react": "^1.76.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "skinview3d": "3.4.2",
     "zustand": "^5.1.0"
   },
   "devDependencies": {

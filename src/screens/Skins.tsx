@@ -3,7 +3,11 @@ import { activeAccount, useStore } from '../store'
 import { api } from '../lib/ipc'
 import type { LibrarySkin, SharedStatus, SkinProfile } from '../lib/types'
 import { SkinPreview } from '../components/SkinPreview'
+import { SkinViewer3D } from '../components/SkinViewer3D'
+import { EMOTES, type EmoteId } from '../lib/emotes'
 import { IconCheck, IconPlus, IconShirt, IconTrash, IconUpload } from '../components/Icons'
+
+const POKES: EmoteId[] = ['wave', 'yes', 'clap', 'bow', 'cheer']
 
 export function Skins() {
   const account = useStore(activeAccount)
@@ -15,7 +19,11 @@ export function Skins() {
   const [busy, setBusy] = useState<string | null>(null)
   const [variant, setVariant] = useState<'classic' | 'slim'>('classic')
   const [shared, setShared] = useState<SharedStatus | null>(null)
+  const [emote, setEmote] = useState<EmoteId>('idle')
+  const [tryOn, setTryOn] = useState<LibrarySkin | null>(null)
   const isOffline = account?.kind === 'offline'
+  const backToIdle = useCallback(() => setEmote('idle'), [])
+  const poke = useCallback(() => setEmote(POKES[Math.floor(Math.random() * POKES.length)]), [])
 
   const loadLibrary = useCallback(() => {
     api.skinLibrary().then(setLibrary).catch(() => setLibrary([]))
@@ -78,7 +86,36 @@ export function Skins() {
             profile ? (
               <>
                 <div className="skin-stage-preview">
-                  <SkinPreview src={profile.skin} slim={profile.variant === 'slim'} cape={activeCape?.image} scale={7} />
+                  <SkinViewer3D
+                    src={tryOn?.image ?? profile.skin}
+                    slim={(tryOn?.variant ?? profile.variant) === 'slim'}
+                    cape={activeCape?.image}
+                    emote={emote}
+                    onEmoteEnd={backToIdle}
+                    onPoke={poke}
+                    nameTag={profile.username}
+                  />
+                  {tryOn && <span className="try-on-badge">Примерка: {tryOn.name}</span>}
+                  <span className="skin3d-hint">Тяните, чтобы повернуть · клик — эмоция</span>
+                </div>
+                <div className="emote-bar" role="group" aria-label="Позы и эмоции">
+                  {(['pose', 'emote'] as const).map((group) => (
+                    <div key={group} className="emote-row">
+                      {EMOTES.filter((e) => e.group === group).map((e) => (
+                        <button
+                          key={e.id}
+                          className={`emote-chip ${emote === e.id ? 'on' : ''}`}
+                          onClick={() => setEmote(emote === e.id && e.id !== 'idle' ? 'idle' : e.id)}
+                          title={e.label}
+                        >
+                          <span className="emote-emoji" aria-hidden="true">
+                            {e.emoji}
+                          </span>
+                          {e.label}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
                 </div>
                 <div className="skin-stage-info">
                   <strong>{profile.username}</strong>
@@ -201,8 +238,14 @@ export function Skins() {
             </div>
           )}
           <div className="skin-grid">
-            {library.map((s) => (
-              <div key={s.id} className="skin-card">
+            {library.map((s, i) => (
+              <div
+                key={s.id}
+                className="skin-card"
+                style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }}
+                onMouseEnter={() => setTryOn(s)}
+                onMouseLeave={() => setTryOn((t) => (t?.id === s.id ? null : t))}
+              >
                 <SkinPreview src={s.image} slim={s.variant === 'slim'} scale={3} />
                 <strong title={s.name}>{s.name}</strong>
                 <div className="row">
@@ -214,6 +257,9 @@ export function Skins() {
                       const p = await run(s.id, () => api.skinApply(account!.id, s.id, variant))
                       if (p) {
                         setProfile(p)
+                        setTryOn(null)
+                        setEmote('cheer')
+                        window.setTimeout(() => setEmote((e) => (e === 'cheer' ? 'idle' : e)), 2200)
                         if (p.shared) {
                           setShared(p.shared)
                           toast(p.shared.state === 'published' ? 'success' : 'info', p.shared.message)

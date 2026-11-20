@@ -1,0 +1,259 @@
+/* ============ Движение и 3D-скины ============
+   Все анимации здесь отключает блок prefers-reduced-motion из styles.css. */
+
+/* ---------- Экраны и списки ---------- */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+.screen {
+  animation: rise-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Карточки сборок появляются «лесенкой» */
+.grid > .card,
+.grid > .card-new {
+  animation: rise-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.grid > :nth-child(2) { animation-delay: 30ms; }
+.grid > :nth-child(3) { animation-delay: 60ms; }
+.grid > :nth-child(4) { animation-delay: 90ms; }
+.grid > :nth-child(5) { animation-delay: 120ms; }
+.grid > :nth-child(6) { animation-delay: 150ms; }
+.grid > :nth-child(7) { animation-delay: 180ms; }
+.grid > :nth-child(n + 8) { animation-delay: 210ms; }
+
+.card {
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.18s,
+    background 0.18s,
+    box-shadow 0.25s;
+}
+.card:hover {
+  transform: translateY(-4px);
+}
+.card-art {
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.card:hover .card-art {
+  transform: scale(1.04);
+}
+
+/* ---------- Сайдбар ---------- */
+.nav-item {
+  position: relative;
+}
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--mint);
+  transform: translateY(-50%) scaleY(0);
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.nav-item.on::before {
+  transform: translateY(-50%) scaleY(1);
+}
+.nav-item svg {
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.4), color 0.15s;
+}
+.nav-item:hover svg {
+  transform: scale(1.12) rotate(-6deg);
+}
+
+/* ---------- Кнопки ---------- */
+.btn:active:not(:disabled),
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@keyframes play-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 10px 30px -10px rgba(61, 220, 132, 0.75),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      inset 0 -3px 0 rgba(0, 0, 0, 0.14);
+  }
+  50% {
+    box-shadow:
+      0 12px 42px -8px rgba(61, 220, 132, 0.95),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      inset 0 -3px 0 rgba(0, 0, 0, 0.14);
+  }
+}
+.play-btn:not(.running):not(.loading) {
+  animation: play-glow 2.8s ease-in-out infinite;
+  overflow: hidden;
+}
+/* Блик, пробегающий по кнопке «Играть» при наведении */
+.play-btn:not(.running):not(.loading)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.play-btn:not(.running):not(.loading):hover::after {
+  transform: translateX(120%);
+  transition: transform 0.7s ease;
+}
+.play-btn:active {
+  transform: scale(0.97);
+}
+
+/* ---------- 3D-скин ---------- */
+.skin-stage-preview {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+}
+.skin-stage-preview::after {
+  /* Тень-«пятно» под ногами */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  width: 120px;
+  height: 18px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+  pointer-events: none;
+}
+.skin3d {
+  width: 100%;
+  cursor: grab;
+  touch-action: none;
+  position: relative;
+  z-index: 1;
+}
+.skin3d:active {
+  cursor: grabbing;
+}
+.skin3d-canvas {
+  display: block;
+  outline: none;
+}
+.skin3d-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  z-index: 2;
+  font-size: 11px;
+  color: var(--faint);
+  pointer-events: none;
+  opacity: 0.8;
+}
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.try-on-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--mint-ink);
+  background: var(--mint);
+  box-shadow: 0 6px 18px -6px rgba(61, 220, 132, 0.8);
+  animation: badge-in 0.2s ease;
+}
+
+.emote-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.emote-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.emote-row + .emote-row {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.emote-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.4),
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+.emote-chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+.emote-chip:active {
+  transform: scale(0.94);
+}
+.emote-chip.on {
+  color: var(--mint-ink);
+  background: var(--mint);
+  border-color: var(--mint);
+}
+.emote-emoji {
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.6);
+}
+.emote-chip:hover .emote-emoji,
+.emote-chip.on .emote-emoji {
+  transform: scale(1.25) rotate(-8deg);
+}
+
+/* Библиотека скинов */
+.skin-card {
+  cursor: default;
+  animation: rise-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.18s,
+    box-shadow 0.25s;
+}
+.skin-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--mint) 55%, transparent);
+  box-shadow: 0 16px 30px -18px rgba(61, 220, 132, 0.6);
+}
+.skin-card .skin-canvas {
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.skin-card:hover .skin-canvas {
+  transform: scale(1.06) translateY(-2px);
+}

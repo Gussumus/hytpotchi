@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import './styles-v2.css'
 import './styles-v3.css'
+import './styles-motion.css'
 import App from './App.tsx'
 
 // Отключаем системное контекстное меню WebView в релизе
