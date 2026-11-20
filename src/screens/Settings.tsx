@@ -5,6 +5,7 @@ import type { JavaList } from '../lib/types'
 import { formatMemory } from '../lib/format'
 import { IconCoffee, IconDownload, IconFolder } from '../components/Icons'
 import { SharedSkinsSettings } from '../components/SharedSkinsSettings'
+import { AppearanceSettings } from '../components/AppearanceSettings'
 
 const JAVA_FOR: Record<number, string> = {
   25: 'Minecraft 26.1 и новее',
@@ -68,9 +69,11 @@ export function Settings() {
       <div className="page-head">
         <div>
           <h1>Настройки</h1>
-          <p className="muted">Hytpotchi 0.1.0</p>
+          <p className="muted">Hytpotchi {features?.version ?? ''}</p>
         </div>
       </div>
+
+      <AppearanceSettings />
 
       <section className="settings-block">
         <div className="settings-title">

@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { api, events, showWindow } from './lib/ipc'
 import type { Account, CrashHint, FeaturesStatus, Instance, LaunchProgress, PackProgress, SystemInfo, VersionsList } from './lib/types'
+import {
+  applyAppearance,
+  loadAppearance,
+  saveAppearance,
+  type Appearance,
+  type CustomBackground,
+} from './lib/appearance'
 
 export type Screen = 'home' | 'instance' | 'content' | 'skins' | 'accounts' | 'settings'
 
@@ -53,6 +60,8 @@ interface State {
   toasts: Toast[]
   pack: PackProgress | null
   prefs: Prefs
+  appearance: Appearance
+  backgrounds: CustomBackground[]
   loaded: boolean
 
   setScreen: (s: Screen) => void
@@ -61,6 +70,9 @@ interface State {
   openInstance: (id: string, tab?: string) => void
   select: (id: string) => void
   setPrefs: (p: Partial<Prefs>) => void
+  setAppearance: (a: Partial<Appearance>) => void
+  loadBackgrounds: () => Promise<void>
+  setBackgrounds: (list: CustomBackground[]) => void
   setPack: (p: PackProgress | null) => void
   toast: (kind: Toast['kind'], text: string, action?: Toast['action']) => void
   dismissToast: (id: number) => void
@@ -93,6 +105,8 @@ export const useStore = create<State>((set, get) => ({
   toasts: [],
   pack: null,
   prefs: loadPrefs(),
+  appearance: loadAppearance(),
+  backgrounds: [],
   loaded: false,
 
   setScreen: (screen) => set({ screen }),
@@ -119,6 +133,31 @@ export const useStore = create<State>((set, get) => ({
       /* ignore */
     }
   },
+  setAppearance: (patch) => {
+    const appearance = { ...get().appearance, ...patch }
+    set({ appearance })
+    applyAppearance(appearance)
+    saveAppearance(appearance)
+  },
+  loadBackgrounds: async () => {
+    try {
+      get().setBackgrounds(await api.backgroundList())
+    } catch {
+      /* без своих фонов — остаются встроенные */
+    }
+  },
+  setBackgrounds: (backgrounds) => {
+    set({ backgrounds })
+    // Если файл фона удалили — экраны, где он стоял, возвращаются к общему фону
+    const ids = new Set(backgrounds.map((b) => `custom:${b.id}`))
+    const a = get().appearance
+    const alive = (ref: string) => !ref.startsWith('custom:') || ids.has(ref)
+    const perScreen = Object.fromEntries(Object.entries(a.perScreen).filter(([, ref]) => ref && alive(ref)))
+    const background = alive(a.background) ? a.background : 'preset:default'
+    if (background !== a.background || Object.keys(perScreen).length !== Object.keys(a.perScreen).length) {
+      get().setAppearance({ background, perScreen })
+    }
+  },
   setPack: (pack) => set({ pack }),
 
   toast: (kind, text, action) => {
@@ -129,6 +168,8 @@ export const useStore = create<State>((set, get) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   init: async () => {
+    applyAppearance(get().appearance)
+    get().loadBackgrounds()
     events.progress((p) => {
       set((s) => ({ progress: { ...s.progress, [p.instanceId]: p } }))
       if (p.stage === 'running') {

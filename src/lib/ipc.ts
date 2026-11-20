@@ -31,6 +31,7 @@ import type {
   VersionsList,
 } from './types'
 import { mockCall, mockListen } from './mock'
+import type { CustomBackground } from './appearance'
 
 /** Запущено внутри Tauri (а не в обычном браузере для предпросмотра) */
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -159,6 +160,12 @@ export const api = {
   skinLibrary: () => call<LibrarySkin[]>('skin_library'),
   skinLibraryAdd: (variant: string) => call<LibrarySkin | null>('skin_library_add', { variant }),
   skinLibraryRemove: (id: string) => call<void>('skin_library_remove', { id }),
+
+  // Внешний вид: свои фоны
+  backgroundList: () => call<CustomBackground[]>('background_list'),
+  backgroundAdd: () => call<CustomBackground | null>('background_add'),
+  backgroundRename: (id: string, name: string) => call<CustomBackground[]>('background_rename', { id, name }),
+  backgroundRemove: (id: string) => call<CustomBackground[]>('background_remove', { id }),
   skinApply: (accountId: string, skinId: string, variant: string) =>
     call<SkinProfile>('skin_apply', { accountId, skinId, variant }),
   skinReset: (accountId: string) => call<SkinProfile>('skin_reset', { accountId }),

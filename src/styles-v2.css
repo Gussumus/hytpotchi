@@ -382,7 +382,7 @@
   border-radius: 18px;
   display: grid;
   place-items: center;
-  background: rgba(61, 220, 132, 0.12);
+  background: rgba(var(--mint-rgb), 0.12);
   color: var(--mint);
   margin-bottom: 4px;
 }
@@ -432,7 +432,7 @@
   font-weight: 700;
 }
 .type-badge.release {
-  background: rgba(61, 220, 132, 0.14);
+  background: rgba(var(--mint-rgb), 0.14);
   color: var(--mint);
 }
 .type-badge.beta {
@@ -465,5 +465,5 @@
   border: 1px solid var(--border);
 }
 .version-choice.current {
-  border-color: rgba(61, 220, 132, 0.35);
+  border-color: rgba(var(--mint-rgb), 0.35);
 }

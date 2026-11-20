@@ -4,7 +4,12 @@ import './styles.css'
 import './styles-v2.css'
 import './styles-v3.css'
 import './styles-motion.css'
+import './styles-appearance.css'
 import App from './App.tsx'
+import { applyAppearance, loadAppearance } from './lib/appearance'
+
+// Сразу, до первого кадра: акцент, масштаб и анимации без «мигания» стандартной темы
+applyAppearance(loadAppearance())
 
 // Отключаем системное контекстное меню WebView в релизе
 if (!import.meta.env.DEV) {

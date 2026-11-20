@@ -51,8 +51,8 @@
   gap: 4px;
   padding: 10px;
   border-radius: 14px;
-  background: rgba(61, 220, 132, 0.06);
-  border: 1px solid rgba(61, 220, 132, 0.22);
+  background: rgba(var(--mint-rgb), 0.06);
+  border: 1px solid rgba(var(--mint-rgb), 0.22);
 }
 .update-row {
   display: flex;
@@ -90,7 +90,7 @@
 .server-icon.placeholder {
   display: grid;
   place-items: center;
-  background: rgba(61, 220, 132, 0.1);
+  background: rgba(var(--mint-rgb), 0.1);
   color: var(--mint);
 }
 .server-motd {
@@ -144,7 +144,7 @@
   padding: 18px 0;
   border-radius: 14px;
   background:
-    radial-gradient(circle at 50% 70%, rgba(61, 220, 132, 0.16), transparent 60%),
+    radial-gradient(circle at 50% 70%, rgba(var(--mint-rgb), 0.16), transparent 60%),
     rgba(0, 0, 0, 0.25);
 }
 .skin-stage-info {

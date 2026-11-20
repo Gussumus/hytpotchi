@@ -7,6 +7,7 @@ import { CreateInstance } from './components/CreateInstance'
 import { EditInstance } from './components/EditInstance'
 import { LoginModal } from './components/LoginModal'
 import { PackProgress } from './components/PackProgress'
+import { AppBackground } from './components/AppBackground'
 import { Home } from './screens/Home'
 import { InstanceScreen } from './screens/Instance'
 import { Content } from './screens/Content'
@@ -25,7 +26,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="backdrop" aria-hidden="true" />
+      <AppBackground />
       <Titlebar />
       <div className="body">
         <Sidebar />

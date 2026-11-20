@@ -125,6 +125,11 @@ pub fn run() {
             commands::extras::export_instance,
             commands::extras::instance_set_cover,
             commands::extras::instance_clear_cover,
+            // Внешний вид
+            commands::appearance::background_list,
+            commands::appearance::background_add,
+            commands::appearance::background_rename,
+            commands::appearance::background_remove,
             // Профили
             commands::profiles::group_create,
             commands::profiles::group_update,

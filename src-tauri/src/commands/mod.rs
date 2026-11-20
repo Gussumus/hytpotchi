@@ -12,3 +12,4 @@ pub mod voice;
 pub mod server;
 pub mod telemetry;
 pub mod update;
+pub mod appearance;

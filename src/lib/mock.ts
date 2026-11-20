@@ -143,6 +143,19 @@ async function fakeLaunch(id: string) {
   }
 }
 
+const mockBackgrounds: { id: string; name: string; kind: string; path: string; file: string }[] = []
+
+function pickBrowserFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = accept
+    input.onchange = () => resolve(input.files?.[0] ?? null)
+    input.oncancel = () => resolve(null)
+    input.click()
+  })
+}
+
 export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
   await sleep(120)
   const r = (v: unknown) => v as T
@@ -394,6 +407,33 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
     case 'instance_open_folder':
     case 'open_data_folder':
       return r(undefined)
+    // Свои фоны в демо-режиме: файл выбирается браузерным диалогом и живёт до перезагрузки
+    case 'background_list':
+      return r([...mockBackgrounds])
+    case 'background_add': {
+      const file = await pickBrowserFile('image/*,video/mp4,video/webm')
+      if (!file) return r(null)
+      const id = Math.random().toString(36).slice(2)
+      const bg = {
+        id,
+        name: file.name.replace(/\.[^.]+$/, ''),
+        kind: file.type.startsWith('video/') ? 'video' : 'image',
+        path: URL.createObjectURL(file),
+        file: file.name,
+      }
+      mockBackgrounds.push(bg)
+      return r(bg)
+    }
+    case 'background_rename': {
+      const bg = mockBackgrounds.find((b) => b.id === args.id)
+      if (bg) bg.name = String(args.name)
+      return r([...mockBackgrounds])
+    }
+    case 'background_remove': {
+      const i = mockBackgrounds.findIndex((b) => b.id === args.id)
+      if (i >= 0) mockBackgrounds.splice(i, 1)
+      return r([...mockBackgrounds])
+    }
     default:
       throw new Error(`Демо-режим: команда ${cmd} недоступна`)
   }

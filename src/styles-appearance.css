@@ -1,0 +1,311 @@
+/* ============ Внешний вид: фоны, панели, уровни анимаций ============
+   Переменные (--bg-dim, --bg-blur, --panel-alpha, --round, --mint*) ставит applyAppearance(). */
+
+:root {
+  --bg-dim: 0.35;
+  --bg-blur: 0px;
+  --panel-alpha: 0.55;
+  --round: 1;
+}
+
+/* ---------- Слой фона ---------- */
+.app-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--bg);
+  --px: 0px;
+  --py: 0px;
+}
+.bg-media {
+  position: absolute;
+  /* Запас по краям, чтобы размытие и параллакс не показывали пустые кромки */
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  object-fit: cover;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(var(--bg-blur));
+  transform: translate3d(var(--px), var(--py), 0);
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes bg-in {
+  from {
+    opacity: 0;
+  }
+}
+.bg-enter {
+  animation: bg-in 0.6s ease;
+}
+@keyframes bg-drift {
+  0% {
+    transform: translate3d(var(--px), var(--py), 0) scale(1);
+  }
+  100% {
+    transform: translate3d(calc(var(--px) - 30px), calc(var(--py) + 20px), 0) scale(1.06);
+  }
+}
+.bg-preset.drift {
+  animation: bg-drift 24s ease-in-out infinite alternate;
+}
+.bg-enter.drift {
+  animation:
+    bg-in 0.6s ease,
+    bg-drift 24s ease-in-out infinite alternate;
+}
+.bg-dim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, calc(var(--bg-dim) * 0.6)) 100%),
+    rgba(4, 6, 9, var(--bg-dim));
+  pointer-events: none;
+}
+
+/* ---------- Панели поверх фона ---------- */
+.main {
+  background: rgba(12, 14, 19, var(--panel-alpha));
+  backdrop-filter: blur(calc(18px * var(--panel-alpha)));
+}
+.sidebar {
+  background: rgba(8, 10, 14, calc(var(--panel-alpha) * 0.5));
+}
+
+/* ---------- Скругление ---------- */
+.card,
+.settings-block,
+.skin-stage,
+.skin-library {
+  border-radius: calc(16px * var(--round));
+}
+.main {
+  border-top-left-radius: calc(18px * var(--round));
+}
+.play-btn,
+.skin-card,
+.modal {
+  border-radius: calc(14px * var(--round));
+}
+
+/* ---------- Уровни анимаций ---------- */
+:root[data-motion='off'] *,
+:root[data-motion='off'] *::before,
+:root[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+:root[data-motion='reduced'] .bg-preset.drift,
+:root[data-motion='reduced'] .play-btn,
+:root[data-motion='reduced'] .grid > *,
+:root[data-motion='reduced'] .skin-card {
+  animation: none !important;
+}
+:root[data-motion='reduced'] .bg-media {
+  transition: none;
+}
+
+/* ---------- Настройки внешнего вида ---------- */
+.ap-swatch-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #ff5d6c, #ffd23f, var(--mint), #4f9cff, #c06bff, #ff5d6c);
+}
+.ap-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.ap-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ap-targets {
+  flex-wrap: wrap;
+}
+.ap-targets button {
+  position: relative;
+}
+.ap-targets button.has-own::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--mint);
+}
+
+.bg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+.bg-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: calc(12px * var(--round));
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border);
+  text-align: left;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.15s,
+    box-shadow 0.2s;
+}
+.bg-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+.bg-tile.on {
+  border-color: var(--mint);
+  box-shadow: 0 0 0 1px var(--mint), 0 10px 24px -14px rgba(var(--mint-rgb), 0.8);
+}
+.bg-tile-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  min-width: 0;
+}
+.bg-tile-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  border-radius: calc(8px * var(--round));
+  overflow: hidden;
+  background: #0a0c10;
+  color: var(--muted);
+}
+.bg-tile-preview .bg-media {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: none;
+  transform: none;
+  animation: none;
+}
+.bg-tile-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bg-tile-used {
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--mint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bg-tile.add .bg-tile-preview {
+  border: 1px dashed var(--border-strong);
+  background: rgba(255, 255, 255, 0.02);
+}
+.bg-tile.add .bg-tile-used {
+  color: var(--faint);
+}
+.bg-tile.inherit .bg-tile-preview .bg-media {
+  opacity: 0.45;
+}
+.bg-tile-inherit {
+  position: relative;
+  font-size: 22px;
+  color: var(--text);
+}
+.bg-tile-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+}
+.bg-tile-remove {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.bg-tile:hover .bg-tile-remove,
+.bg-tile-remove:focus-visible {
+  opacity: 1;
+}
+
+.ap-sliders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px 20px;
+}
+.ap-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ap-slider-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ap-slider-head b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.accent-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.accent-dot {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.5);
+  cursor: pointer;
+}
+.accent-dot:hover {
+  transform: scale(1.12);
+}
+.accent-dot.on {
+  border-color: var(--text);
+  transform: scale(1.08);
+}
+.accent-dot.custom {
+  background: conic-gradient(from 0deg, #ff5d6c, #ffd23f, #3ddc84, #4f9cff, #c06bff, #ff5d6c);
+  overflow: hidden;
+}
+.accent-dot.custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}

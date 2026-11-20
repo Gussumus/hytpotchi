@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { NameTagObject, SkinViewer } from 'skinview3d'
 import { emoteById, type EmoteId } from '../lib/emotes'
+import { motionReduced } from '../lib/appearance'
 
 /** Угол, под которым персонаж стоит по умолчанию: три четверти, чтобы был виден объём */
 const BASE_YAW = -0.45
 
-const reducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const reducedMotion = motionReduced
 
 /** Нейтральный манекен, если скин не задан (своя текстура, без ассетов Mojang) */
 let mannequin: string | null = null
