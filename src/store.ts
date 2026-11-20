@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api, events, showWindow } from './lib/ipc'
-import type { Account, CrashHint, Instance, LaunchProgress, PackProgress, SystemInfo, VersionsList } from './lib/types'
+import type { Account, CrashHint, FeaturesStatus, Instance, LaunchProgress, PackProgress, SystemInfo, VersionsList } from './lib/types'
 
 export type Screen = 'home' | 'instance' | 'content' | 'skins' | 'accounts' | 'settings'
 
@@ -44,6 +44,8 @@ interface State {
   accounts: Account[]
   versions: VersionsList | null
   system: SystemInfo | null
+  features: FeaturesStatus | null
+  installUpdate: () => Promise<void>
   progress: Record<string, LaunchProgress | undefined>
   errors: Record<string, string | undefined>
   hints: Record<string, CrashHint | undefined>
@@ -83,6 +85,7 @@ export const useStore = create<State>((set, get) => ({
   accounts: [],
   versions: null,
   system: null,
+  features: null,
   progress: {},
   errors: {},
   hints: {},
@@ -175,6 +178,20 @@ export const useStore = create<State>((set, get) => ({
     const selectedId = instances.find((i) => i.id === saved)?.id ?? instances[0]?.id ?? null
     set({ selectedId, loaded: true })
     api.systemInfo().then((system) => set({ system })).catch(() => {})
+    api
+      .features()
+      .then(async (features) => {
+        set({ features })
+        if (!features.updater) return
+        const update = await api.updateCheck()
+        if (update.version) {
+          get().toast('info', `Доступна новая версия Hytpotchi ${update.version}`, {
+            label: 'Обновить',
+            run: () => get().installUpdate(),
+          })
+        }
+      })
+      .catch(() => {})
   },
 
   refreshInstances: async () => {
@@ -237,6 +254,15 @@ export const useStore = create<State>((set, get) => ({
         progress: { ...s.progress, [id]: undefined },
       }))
       get().toast('error', message)
+    }
+  },
+
+  installUpdate: async () => {
+    get().toast('info', 'Скачиваем обновление — лаунчер перезапустится сам')
+    try {
+      await api.updateInstall()
+    } catch (e) {
+      get().toast('error', (e as Error).message)
     }
   },
 

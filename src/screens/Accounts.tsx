@@ -9,6 +9,7 @@ export function Accounts() {
   const refresh = useStore((s) => s.refreshAccounts)
   const setModal = useStore((s) => s.setModal)
   const toast = useStore((s) => s.toast)
+  const msReady = useStore((s) => s.features?.microsoft ?? true)
   const [nick, setNick] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -83,9 +84,21 @@ export function Accounts() {
           </div>
           <h3>Microsoft</h3>
           <p className="muted">Лицензионный Minecraft: онлайн-серверы, скины и плащи.</p>
-          <button className="btn primary wide" onClick={() => setModal({ type: 'login' })}>
-            Войти через Microsoft
-          </button>
+          {msReady ? (
+            <button className="btn primary wide" onClick={() => setModal({ type: 'login' })}>
+              Войти через Microsoft
+            </button>
+          ) : (
+            <>
+              <button className="btn wide" disabled>
+                Скоро
+              </button>
+              <span className="muted small">
+                Вход через Microsoft появится в одной из следующих версий — сейчас его подключение ждёт одобрения Mojang.
+                Пока можно играть с офлайн-аккаунтом.
+              </span>
+            </>
+          )}
         </div>
         <div className="panel">
           <div className="panel-icon">

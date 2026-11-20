@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Ключи и сгенерированный конфиг релиза
+*.key
+!*.key.pub
+src-tauri/tauri.release.json
+server/skins/.wrangler

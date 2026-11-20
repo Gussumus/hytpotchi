@@ -21,6 +21,25 @@ export function Settings() {
   const [java, setJava] = useState<JavaList | null>(null)
   const [installing, setInstalling] = useState<number | null>(null)
   const [discordReady, setDiscordReady] = useState(false)
+  const features = useStore((s) => s.features)
+  const installUpdate = useStore((s) => s.installUpdate)
+  const [checking, setChecking] = useState(false)
+
+  async function checkUpdates() {
+    setChecking(true)
+    try {
+      const u = await api.updateCheck()
+      if (u.version) {
+        toast('info', `Доступна версия ${u.version}`, { label: 'Обновить', run: installUpdate })
+      } else {
+        toast('success', `У вас последняя версия (${u.currentVersion})`)
+      }
+    } catch (e) {
+      toast('error', (e as Error).message)
+    } finally {
+      setChecking(false)
+    }
+  }
   useEffect(() => {
     api.discordStatus().then((s) => setDiscordReady(s.available)).catch(() => {})
   }, [])
@@ -161,10 +180,35 @@ export function Settings() {
           <div>
             <h3>О программе</h3>
             <p className="muted">
-              Hytpotchi — свободный лаунчер Minecraft (GPL-3.0). Не связан с Mojang и Microsoft. Моды предоставляются Modrinth.
+              Hytpotchi {features?.version ?? ''} — свободный лаунчер Minecraft (GPL-3.0). Не связан с Mojang и Microsoft.
+              Моды предоставляются Modrinth.
             </p>
           </div>
         </div>
+        {features && (
+          <div className="service-list">
+            {(
+              [
+                ['Обновления', features.updater],
+                ['Вход через Microsoft', features.microsoft],
+                ['Общие скины', features.skinServer],
+                ['Статус в Discord', features.discord],
+              ] as const
+            ).map(([name, on]) => (
+              <span key={name} className={`service ${on ? 'on' : ''}`}>
+                <span className="service-dot" />
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
+        {features?.updater && (
+          <div className="row">
+            <button className="btn ghost" disabled={checking} onClick={checkUpdates}>
+              {checking ? <span className="spinner xs" /> : null} Проверить обновления
+            </button>
+          </div>
+        )}
       </section>
     </div>
   )

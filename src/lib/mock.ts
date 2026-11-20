@@ -306,6 +306,10 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
       if (cmd === 'skin_reset' && acc) acc.offlineSkin = null
       return r({ username: acc?.username ?? 'Игрок', uuid: acc?.uuid ?? '', skin: acc?.offlineSkin ?? null, variant: 'classic', capes: [] })
     }
+    case 'features_status':
+      return r({ version: '0.1.0', microsoft: false, skinServer: sharedServer !== null, discord: false, updater: false })
+    case 'update_check':
+      return r({ supported: false, currentVersion: '0.1.0', version: null, notes: null })
     case 'shared_skins_get':
       return r({ enabled: sharedEnabled, customServer: sharedServer, server: sharedServer })
     case 'shared_skins_set': {

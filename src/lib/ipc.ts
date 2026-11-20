@@ -17,6 +17,8 @@ import type {
   LibrarySkin,
   SharedSkins,
   SharedStatus,
+  FeaturesStatus,
+  AppUpdate,
   Instance,
   InstancePatch,
   JavaList,
@@ -165,6 +167,11 @@ export const api = {
   sharedSkinsGet: () => call<SharedSkins>('shared_skins_get'),
   sharedSkinsSet: (enabled: boolean, server: string | null) => call<SharedSkins>('shared_skins_set', { enabled, server }),
   skinPublish: (accountId: string) => call<SharedStatus>('skin_publish', { accountId }),
+
+  // Обновления и статус сервисов
+  features: () => call<FeaturesStatus>('features_status'),
+  updateCheck: () => call<AppUpdate>('update_check'),
+  updateInstall: () => call<void>('update_install'),
 }
 
 export async function showWindow(visible: boolean) {

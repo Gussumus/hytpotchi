@@ -1,0 +1,88 @@
+# Релиз: git tag v0.2.0 && git push origin v0.2.0
+# Собирает подписанный установщик, latest.json для автообновления и публикует релиз на GitHub.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      # Публичные значения — в Settings → Secrets and variables → Actions → Variables
+      HYTPOTCHI_MS_CLIENT_ID: ${{ vars.HYTPOTCHI_MS_CLIENT_ID }}
+      HYTPOTCHI_SKIN_SERVER: ${{ vars.HYTPOTCHI_SKIN_SERVER }}
+      HYTPOTCHI_DISCORD_ID: ${{ vars.HYTPOTCHI_DISCORD_ID }}
+      # Автообновление включается только в этих сборках
+      HYTPOTCHI_UPDATER: '1'
+      # Приватный ключ подписи обновлений — в Secrets
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Проверка ключа подписи
+        shell: bash
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Не задан секрет TAURI_SIGNING_PRIVATE_KEY (см. docs/SETUP.md)"
+            exit 1
+          fi
+
+      - name: Конфиг релиза (версия из тега, автообновление)
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$VERSION" in [0-9]*) ;; *) VERSION="0.0.0-dev.${GITHUB_RUN_NUMBER}";; esac
+          PUBKEY="$(tr -d '\r\n' < src-tauri/updater.pub)"
+          cat > src-tauri/tauri.release.json <<EOF
+          {
+            "version": "${VERSION}",
+            "bundle": { "createUpdaterArtifacts": true },
+            "plugins": {
+              "updater": {
+                "pubkey": "${PUBKEY}",
+                "endpoints": ["https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/latest.json"],
+                "windows": { "installMode": "passive" }
+              }
+            }
+          }
+          EOF
+          cat src-tauri/tauri.release.json
+
+      - name: Тесты
+        working-directory: src-tauri
+        run: cargo test --locked
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Hytpotchi ${{ github.ref_name }}
+          releaseBody: |
+            Скачайте **Hytpotchi_..._x64-setup.exe** ниже и запустите.
+            Если Windows покажет «Система Windows защитила ваш компьютер» — «Подробнее» → «Выполнить в любом случае».
+            Уже установленный лаунчер обновится сам.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --config src-tauri/tauri.release.json

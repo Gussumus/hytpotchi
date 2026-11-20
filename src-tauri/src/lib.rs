@@ -55,7 +55,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 /// Запуск приложения
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().level(log::LevelFilter::Info).build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -63,7 +63,14 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_os::init());
+    // Автообновление есть только в релизах из CI: там вшиты ключ и адрес обновлений
+    let builder = if commands::update::enabled() {
+        builder.plugin(tauri_plugin_updater::Builder::new().build())
+    } else {
+        builder
+    };
+    builder
         .invoke_handler(tauri::generate_handler![
             // Аккаунты
             commands::accounts::microsoft_auth_start,
@@ -134,6 +141,10 @@ pub fn run() {
             commands::skins::shared_skins_get,
             commands::skins::shared_skins_set,
             commands::skins::skin_publish,
+            // Обновления и статус сервисов
+            commands::update::update_check,
+            commands::update::update_install,
+            commands::update::features_status,
             // Облако
             commands::cloud::sync_push,
             commands::cloud::sync_pull,

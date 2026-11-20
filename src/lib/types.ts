@@ -254,3 +254,18 @@ export interface PackProgress {
   done: number
   total: number
 }
+
+export interface FeaturesStatus {
+  version: string
+  microsoft: boolean
+  skinServer: boolean
+  discord: boolean
+  updater: boolean
+}
+
+export interface AppUpdate {
+  supported: boolean
+  currentVersion: string
+  version: string | null
+  notes: string | null
+}

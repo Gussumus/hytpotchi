@@ -11,3 +11,4 @@ pub mod friends;
 pub mod voice;
 pub mod server;
 pub mod telemetry;
+pub mod update;
