@@ -9,7 +9,8 @@ use crate::engine::accounts::vault::{TokenVault, game_session};
 use crate::engine::core::http::HttpClient;
 use crate::engine::core::paths::{instance_game_dir, instance_natives_dir, version_json_path};
 use crate::engine::game::install::{
-    ensure_version_files, extract_natives, install_loader, legacy_assets_dir,
+    ensure_version_files, extract_natives, install_loader, latest_loader_version, legacy_assets_dir,
+    loader_version_cmp,
 };
 use crate::engine::game::java::{ensure_java, normalize_major};
 use crate::engine::game::loaders::{self, ForgeKind};
@@ -98,6 +99,23 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
             GameLogEvent { instance_id: instance_id.to_string(), line, stderr: false },
         );
     };
+
+    // 0. Раньше для Quilt выбиралась устаревшая версия (список в мета-API не отсортирован),
+    // и новые версии игры падали с «Unsupported class file major version». Если в сборке
+    // записан Quilt старее актуального стабильного — переустанавливаем загрузчик.
+    if instance.loader.as_deref() == Some("quilt") {
+        if let Some(current) = instance.loader_version.clone() {
+            if let Ok(latest) =
+                latest_loader_version(&http, "quilt", &instance.game_version).await
+            {
+                if loader_version_cmp(&current, &latest).is_lt() {
+                    console(format!("Обновляю Quilt Loader {current} → {latest}"));
+                    instance.loader_version = Some(latest);
+                    instance.version_id = None;
+                }
+            }
+        }
+    }
 
     // 1. Загрузчик — ставится один раз
     let installed = instance

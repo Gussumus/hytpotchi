@@ -288,17 +288,45 @@ pub async fn latest_loader_version(
     let base = loader_meta(loader)?;
     let url = format!("{base}/versions/loader/{}", urlencoding::encode(game_version));
     let entries: Vec<LoaderEntry> = client.get_json(&url).await?;
-    let pick = entries
-        .iter()
-        .find(|e| {
-            e.loader.stable.unwrap_or_else(|| {
-                let v = e.loader.version.to_lowercase();
-                !(v.contains("beta") || v.contains("pre") || v.contains("rc"))
-            })
-        })
-        .or_else(|| entries.first())
-        .with_context(|| format!("{loader} не поддерживает Minecraft {game_version}"))?;
-    Ok(pick.loader.version.clone())
+    pick_loader_version(&entries)
+        .with_context(|| format!("{loader} не поддерживает Minecraft {game_version}"))
+}
+
+fn is_stable_loader(info: &LoaderInfo) -> bool {
+    info.stable.unwrap_or_else(|| {
+        let v = info.version.to_lowercase();
+        !(v.contains("beta") || v.contains("alpha") || v.contains("pre") || v.contains("rc"))
+    })
+}
+
+/// Ключ сравнения версий загрузчика: "0.30.2" → [0, 30, 2], "0.31.0-beta.6" → [0, 31, 0] + [6]
+fn loader_version_key(v: &str) -> (Vec<u64>, Vec<u64>) {
+    let (core, suffix) = v.split_once(['-', '+']).unwrap_or((v, ""));
+    let nums = |s: &str| -> Vec<u64> {
+        s.split(|c: char| !c.is_ascii_digit())
+            .filter(|p| !p.is_empty())
+            .filter_map(|p| p.parse().ok())
+            .collect()
+    };
+    (nums(core), nums(suffix))
+}
+
+pub fn loader_version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    loader_version_key(a).cmp(&loader_version_key(b))
+}
+
+/// Самая новая стабильная версия, иначе самая новая вообще.
+/// Порядок в мета-API не гарантирован: у Quilt список для версии игры не отсортирован,
+/// поэтому «первая стабильная» могла оказаться древней (0.24.0 без поддержки Java 25).
+fn pick_loader_version(entries: &[LoaderEntry]) -> Option<String> {
+    let newest = |stable_only: bool| {
+        entries
+            .iter()
+            .filter(|e| !stable_only || is_stable_loader(&e.loader))
+            .max_by(|a, b| loader_version_cmp(&a.loader.version, &b.loader.version))
+            .map(|e| e.loader.version.clone())
+    };
+    newest(true).or_else(|| newest(false))
 }
 
 /// Установить профиль загрузчика. Возвращает id версии для запуска.
@@ -330,4 +358,47 @@ pub async fn install_loader(
     }
     tokio::fs::write(&path, serde_json::to_vec_pretty(&profile)?).await?;
     Ok((id, loader_version))
+}
+
+#[cfg(test)]
+mod loader_pick_tests {
+    use super::*;
+
+    fn entry(v: &str, stable: Option<bool>) -> LoaderEntry {
+        LoaderEntry { loader: LoaderInfo { version: v.into(), stable } }
+    }
+
+    #[test]
+    fn picks_newest_stable_from_unsorted_list() {
+        let list = [
+            entry("0.20.0-beta.9", None),
+            entry("0.24.0", None),
+            entry("0.30.0-beta.8", None),
+            entry("0.19.5", None),
+            entry("0.30.2", None),
+            entry("0.31.0-beta.6", None),
+            entry("0.30.10", None),
+        ];
+        assert_eq!(pick_loader_version(&list).as_deref(), Some("0.30.10"));
+    }
+
+    #[test]
+    fn falls_back_to_newest_beta() {
+        let list = [entry("0.1.0-beta.2", None), entry("0.1.0-beta.10", None)];
+        assert_eq!(pick_loader_version(&list).as_deref(), Some("0.1.0-beta.10"));
+    }
+
+    #[test]
+    fn respects_stable_flag() {
+        let list = [entry("0.20.1", Some(true)), entry("0.21.0", Some(false))];
+        assert_eq!(pick_loader_version(&list).as_deref(), Some("0.20.1"));
+    }
+
+    #[test]
+    fn compares_versions() {
+        use std::cmp::Ordering::*;
+        assert_eq!(loader_version_cmp("0.24.0", "0.30.2"), Less);
+        assert_eq!(loader_version_cmp("0.30.10", "0.30.2"), Greater);
+        assert_eq!(loader_version_cmp("0.30.2", "0.30.2"), Equal);
+    }
 }

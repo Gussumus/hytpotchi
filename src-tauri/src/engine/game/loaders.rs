@@ -18,6 +18,8 @@ use crate::engine::game::java::JavaRuntime;
 use crate::engine::game::manifest::maven_path;
 
 const FORGE_MAVEN: &str = "https://maven.minecraftforge.net/net/minecraftforge/forge";
+/// promotions_slim.json лежит не в maven, а на files.minecraftforge.net (в maven — 404)
+const FORGE_FILES: &str = "https://files.minecraftforge.net/net/minecraftforge/forge";
 const NEO_MAVEN: &str = "https://maven.neoforged.net/releases/net/neoforged";
 const NEO_API: &str = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged";
 
@@ -77,7 +79,7 @@ pub async fn latest_version(http: &HttpClient, kind: ForgeKind, mc: &str) -> Res
     match kind {
         ForgeKind::Forge => {
             let promos: Promotions = http
-                .get_json(&format!("{FORGE_MAVEN}/promotions_slim.json"))
+                .get_json(&format!("{FORGE_FILES}/promotions_slim.json"))
                 .await?;
             promos
                 .promos
