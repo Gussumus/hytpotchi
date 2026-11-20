@@ -206,13 +206,14 @@ mod tests {
 
     #[test]
     fn test_safe_join_symlink() {
-        let temp = TempDir::new().unwrap();
-        let target = TempDir::new().unwrap();
+        // На Windows симлинки без прав администратора не создать — проверка только для unix
+        let _temp = TempDir::new().unwrap();
+        let _target = TempDir::new().unwrap();
 
         #[cfg(unix)]
         {
-            std::os::unix::fs::symlink(target.path(), temp.path().join("link")).unwrap();
-            let result = safe_join(temp.path(), "link/../etc/passwd");
+            std::os::unix::fs::symlink(_target.path(), _temp.path().join("link")).unwrap();
+            let result = safe_join(_temp.path(), "link/../etc/passwd");
             assert!(result.is_err());
         }
     }

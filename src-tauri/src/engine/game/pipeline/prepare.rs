@@ -238,6 +238,9 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
         }
     }
 
+    // Миры друзей — сразу в списке серверов игры
+    crate::engine::friends::before_launch(&app, &instance).await;
+
     // 7. План и запуск
     emit("starting", 0, 1);
     let game_dir = instance_game_dir(instance_id)?;

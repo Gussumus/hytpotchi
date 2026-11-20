@@ -95,13 +95,26 @@ pub struct FriendsService {
     lock: tokio::sync::Mutex<()>,
     tunnels: Arc<tunnel::Tunnels>,
     pack: Mutex<Option<PackCache>>,
+    /// Неудачных синхронизаций подряд: ошибку показываем со второй, чтобы разовый сбой сети не мигал
+    failures: std::sync::atomic::AtomicU32,
 }
 
-/// Игра закрылась: закрыть вход к другу (локальный порт) и обновить статус
-pub fn game_exited(app: &AppHandle) {
+/// Игра закрылась: убрать миры друзей из её списка серверов, закрыть входы и обновить статус
+pub fn game_exited(app: &AppHandle, instance_id: &str) {
     if let Some(svc) = app.try_state::<Arc<FriendsService>>() {
+        if let Ok(dir) = crate::engine::core::paths::instance_game_dir(instance_id) {
+            let _ = crate::engine::game::serversdat::sync_friends(&dir, &[]);
+        }
         svc.tunnels.stop_guest();
         svc.wake.notify_one();
+    }
+}
+
+/// Перед запуском сборки: сразу положить в список серверов миры друзей, которые сейчас открыты
+pub async fn before_launch(app: &AppHandle, instance: &store::Instance) {
+    if let Some(svc) = app.try_state::<Arc<FriendsService>>() {
+        let svc = svc.inner().clone();
+        svc.update_server_list(app, instance).await;
     }
 }
 
@@ -154,7 +167,9 @@ impl FriendsService {
                     loader: inst.loader,
                     address: h.address,
                     world: h.world,
-                    relay: h.lan,
+                    // Есть порт «Открыть для сети» — друзья заходят через туннель лаунчера (обычный HTTPS),
+                    // даже если стоит e4mc: его UDP-трафик у части провайдеров не проходит
+                    relay: h.lan || h.port.is_some(),
                     port: h.port,
                     mods: None,
                     missing: Vec::new(),
@@ -294,10 +309,17 @@ impl FriendsService {
             s.syncing = false;
             match result {
                 Ok(snap) => {
+                    self.failures.store(0, std::sync::atomic::Ordering::Relaxed);
                     s.snapshot = Some(snap);
                     s.error = None;
                 }
-                Err(e) => s.error = Some(format!("{e:#}")),
+                Err(e) => {
+                    let n = self.failures.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    // Без снимка показывать нечего — ошибку сразу; иначе ждём второго сбоя подряд
+                    if n >= 2 || s.snapshot.is_none() {
+                        s.error = Some(format!("{e:#}"));
+                    }
+                }
             }
             s.clone()
         };
@@ -314,6 +336,17 @@ impl FriendsService {
             }
         }
         let _ = app.emit("friends-update", &snapshot);
+
+        // Игра запущена — миры друзей в её списке серверов держим актуальными
+        // (Minecraft перечитывает servers.dat, когда открывают «Сетевую игру»)
+        if snapshot.error.is_none() {
+            let running = app.state::<GameWatcher>().running_ids();
+            for id in running {
+                if let Ok(inst) = store::get(&id) {
+                    self.update_server_list(app, &inst).await;
+                }
+            }
+        }
         snapshot
     }
 
@@ -354,6 +387,80 @@ impl FriendsService {
             })
         });
         self.tunnels.start_guest(&server, &host_id, tickets).await
+    }
+
+    /// Миры друзей в списке серверов Minecraft («Сетевая игра»).
+    /// Попадают миры с той же версией игры; для туннеля лаунчер держит локальный порт на каждого друга.
+    pub async fn update_server_list(&self, app: &AppHandle, instance: &store::Instance) {
+        let friends: Vec<Value> = self
+            .state
+            .lock()
+            .snapshot
+            .as_ref()
+            .and_then(|s| s["friends"].as_array().cloned())
+            .unwrap_or_default();
+        let mut entries = Vec::new();
+        let mut alive_hosts = HashSet::new();
+        for f in friends.iter().filter(|f| f["online"] == true) {
+            let host = &f["host"];
+            if host.is_null() || host["mc"].as_str() != Some(instance.game_version.as_str()) {
+                continue;
+            }
+            let nick = f["nick"].as_str().unwrap_or("Друг");
+            let world = host["world"].as_str().unwrap_or("мир");
+            let address = if host["relay"] == true {
+                let Some(friend_id) = f["id"].as_str() else { continue };
+                match self.guest_address(app, friend_id).await {
+                    Ok((host_id, addr)) => {
+                        alive_hosts.insert(host_id);
+                        addr
+                    }
+                    Err(e) => {
+                        log::warn!("Мир {nick} не добавлен в список серверов: {e:#}");
+                        continue;
+                    }
+                }
+            } else {
+                match host["address"].as_str() {
+                    Some(a) => a.to_string(),
+                    None => continue,
+                }
+            };
+            entries.push((format!("● {nick} — {world}"), address));
+        }
+        // Пока игра запущена, не закрываем входы, которыми она может пользоваться прямо сейчас
+        if !app.state::<GameWatcher>().running_ids().is_empty() {
+            self.tunnels.keep_guests(&alive_hosts);
+        }
+        if let Ok(dir) = crate::engine::core::paths::instance_game_dir(&instance.id) {
+            match crate::engine::game::serversdat::sync_friends(&dir, &entries) {
+                Ok(true) => log::info!("Список серверов: миров друзей — {}", entries.len()),
+                Ok(false) => {}
+                Err(e) => log::warn!("Список серверов не обновлён: {e:#}"),
+            }
+        }
+    }
+
+    /// Локальный адрес входа в мир друга через туннель (билет — свежий на каждое соединение)
+    async fn guest_address(&self, app: &AppHandle, friend_id: &str) -> Result<(String, String)> {
+        let (_, token) = Self::token(app).await?;
+        let server = hytpotchi::server()?;
+        let http = app.state::<HttpClient>().inner().clone();
+        let first = hytpotchi::post(&http, "/api/friends/join", Some(&token), json!({ "id": friend_id })).await?;
+        let host_id = first["hostId"].as_str().unwrap_or_default().to_string();
+        if host_id.is_empty() {
+            bail!("Сервер не открыл туннель");
+        }
+        let friend_id = friend_id.to_string();
+        let tickets: tunnel::TicketSource = Arc::new(move || {
+            let (http, token, friend_id) = (http.clone(), token.clone(), friend_id.clone());
+            Box::pin(async move {
+                let r = hytpotchi::post(&http, "/api/friends/join", Some(&token), json!({ "id": friend_id })).await?;
+                r["ticket"].as_str().map(str::to_string).ok_or_else(|| anyhow::anyhow!("Сервер не выдал билет"))
+            })
+        });
+        let addr = self.tunnels.start_guest(&server, &host_id, tickets).await?;
+        Ok((host_id, addr))
     }
 
     /// Поставить ту же сборку, что у друга (по его описи на сервере)

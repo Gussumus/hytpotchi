@@ -57,11 +57,25 @@ pub async fn server_error(resp: reqwest::Response) -> anyhow::Error {
 /// POST на сервер Hytpotchi; ошибки сервера приходят понятным текстом
 pub async fn post(http: &HttpClient, path: &str, token: Option<&str>, body: Value) -> Result<Value> {
     let server = server()?;
-    let mut req = http.client.post(format!("{server}{path}")).json(&body).timeout(Duration::from_secs(20));
-    if let Some(t) = token {
-        req = req.bearer_auth(t);
-    }
-    let resp = req.send().await.map_err(|_| anyhow::anyhow!("Сервер Hytpotchi недоступен — проверьте интернет"))?;
+    let build = || {
+        let req = http.client.post(format!("{server}{path}")).json(&body).timeout(Duration::from_secs(20));
+        match token {
+            Some(t) => req.bearer_auth(t),
+            None => req,
+        }
+    };
+    // Один повтор: соединение могло оборваться разово (переподключение VPN, смена сети)
+    let resp = match build().send().await {
+        Ok(r) => r,
+        Err(first) => {
+            log::warn!("Сервер Hytpotchi: {first:#} — повторяю");
+            tokio::time::sleep(Duration::from_millis(600)).await;
+            build().send().await.map_err(|e| {
+                log::warn!("Сервер Hytpotchi недоступен: {e:#}");
+                anyhow::anyhow!("Сервер Hytpotchi недоступен — проверьте интернет")
+            })?
+        }
+    };
     if !resp.status().is_success() {
         return Err(server_error(resp).await);
     }

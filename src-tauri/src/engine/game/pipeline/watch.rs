@@ -236,7 +236,7 @@ impl GameWatcher {
                 s.hosted.remove(&instance_id);
                 s.worlds.remove(&instance_id);
             }
-            crate::engine::friends::game_exited(&app);
+            crate::engine::friends::game_exited(&app, &instance_id);
             log::info!("Игра {instance_id} (pid {pid}) завершилась: {exit_code:?}");
             on_exit(&info);
             let _ = app.emit("game-exit", &info);

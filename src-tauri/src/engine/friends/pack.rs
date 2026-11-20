@@ -110,6 +110,10 @@ pub async fn build(http: &HttpClient, inst: &Instance) -> Result<SharedPack> {
     let mut files = Vec::new();
     let mut missing = Vec::new();
     for (name, sha1, size) in local {
+        // e4mc нужен только хозяину мира (и только как запасной путь) — другу его не передаём
+        if name.to_lowercase().contains("e4mc") {
+            continue;
+        }
         let url = found.get(&sha1).and_then(|v| {
             v.files
                 .iter()

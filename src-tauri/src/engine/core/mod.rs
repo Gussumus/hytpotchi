@@ -18,6 +18,7 @@ pub mod pace;
 pub mod paths;
 pub mod prefs;
 pub mod proc;
+pub mod proxy;
 // pub mod pulse;
 pub mod safepath;
 // pub mod selfdelta;

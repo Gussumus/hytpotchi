@@ -78,3 +78,63 @@ pub fn remove(game_dir: &Path, address: &str) -> Result<()> {
         .collect();
     write_all(game_dir, list)
 }
+
+/// Метка записей, которые добавил лаунчер (миры друзей). По ней их находим и обновляем.
+pub const FRIEND_MARK: &str = " · друг Hytpotchi";
+
+/// Заменить записи миров друзей на актуальные (свои серверы игрока не трогаются).
+/// Миры друзей идут первыми. Возвращает true, если файл изменился.
+pub fn sync_friends(game_dir: &Path, entries: &[(String, String)]) -> Result<bool> {
+    let current = existing_tags(game_dir)?;
+    let is_friend = |t: &Tag| t.get("name").and_then(Tag::as_str).is_some_and(|n| n.ends_with(FRIEND_MARK));
+    let old_friends: Vec<(String, String)> = current
+        .iter()
+        .filter(|t| is_friend(t))
+        .filter_map(|t| Some((t.get("name")?.as_str()?.to_string(), t.get("ip")?.as_str()?.to_string())))
+        .collect();
+    let wanted: Vec<(String, String)> = entries
+        .iter()
+        .map(|(name, ip)| (format!("{name}{FRIEND_MARK}"), ip.clone()))
+        .collect();
+    if old_friends == wanted {
+        return Ok(false);
+    }
+    let mut list: Vec<Tag> = wanted
+        .into_iter()
+        .map(|(name, ip)| {
+            Tag::Compound(vec![
+                ("name".into(), Tag::String(name)),
+                ("ip".into(), Tag::String(ip)),
+                // Не спрашивать про скачивание ресурспака сервера каждый раз
+                ("acceptTextures".into(), Tag::Byte(1)),
+            ])
+        })
+        .collect();
+    list.extend(current.into_iter().filter(|t| !is_friend(t)));
+    write_all(game_dir, list)?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn friends_entries_replace_only_own() {
+        let dir = tempfile::tempdir().unwrap();
+        add(dir.path(), "Мой сервер", "mc.example.org").unwrap();
+        assert!(sync_friends(dir.path(), &[("● Liza — Остров".into(), "127.0.0.1:5000".into())]).unwrap());
+        let list = read(dir.path()).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].address, "127.0.0.1:5000");
+        assert!(list[0].name.ends_with(FRIEND_MARK));
+        assert_eq!(list[1].address, "mc.example.org");
+        // Повтор — без изменений
+        assert!(!sync_friends(dir.path(), &[("● Liza — Остров".into(), "127.0.0.1:5000".into())]).unwrap());
+        // Друг ушёл — его запись пропала, свой сервер остался
+        assert!(sync_friends(dir.path(), &[]).unwrap());
+        let list = read(dir.path()).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].address, "mc.example.org");
+    }
+}

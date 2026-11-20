@@ -30,7 +30,8 @@ pub type TicketSource = Arc<dyn Fn() -> futures::future::BoxFuture<'static, Resu
 #[derive(Default)]
 pub struct Tunnels {
     host: Mutex<Option<HostTunnel>>,
-    guest: Mutex<Option<GuestTunnel>>,
+    /// Входы в миры друзей: hostId → локальный порт (для «Присоединиться» и списка серверов)
+    guests: Mutex<std::collections::HashMap<String, GuestTunnel>>,
 }
 
 struct HostTunnel {
@@ -40,7 +41,6 @@ struct HostTunnel {
 }
 
 struct GuestTunnel {
-    host_id: String,
     port: u16,
     task: JoinHandle<()>,
 }
@@ -202,8 +202,8 @@ impl Tunnels {
 
     /// Подготовить вход в мир друга. Возвращает локальный адрес для игры.
     pub async fn start_guest(&self, server: &str, host_id: &str, tickets: TicketSource) -> Result<String> {
-        if let Some(g) = self.guest.lock().as_ref() {
-            if g.host_id == host_id && !g.task.is_finished() {
+        if let Some(g) = self.guests.lock().get(host_id) {
+            if !g.task.is_finished() {
                 return Ok(format!("127.0.0.1:{}", g.port));
             }
         }
@@ -227,12 +227,20 @@ impl Tunnels {
                 });
             }
         });
-        *self.guest.lock() = Some(GuestTunnel { host_id: host_id.to_string(), port, task });
+        self.guests
+            .lock()
+            .insert(host_id.to_string(), GuestTunnel { port, task });
         Ok(format!("127.0.0.1:{port}"))
     }
 
+    /// Закрыть все входы в миры друзей
     pub fn stop_guest(&self) {
-        self.guest.lock().take();
+        self.guests.lock().clear();
+    }
+
+    /// Закрыть входы в миры, которых больше нет (друг закрыл мир)
+    pub fn keep_guests(&self, alive: &std::collections::HashSet<String>) {
+        self.guests.lock().retain(|id, _| alive.contains(id));
     }
 }
 
@@ -279,5 +287,95 @@ mod tests {
         let mut got = [0u8; 3];
         tokio::time::timeout(Duration::from_secs(5), game.read_exact(&mut got)).await.unwrap().unwrap();
         assert_eq!(got, [3, 2, 1]);
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    use serde_json::{Value, json};
+
+    const S: &str = "https://hytpotchi-skins.akiom31.workers.dev";
+
+    async fn post(c: &reqwest::Client, path: &str, body: Value, token: Option<&str>) -> Value {
+        let mut r = c.post(format!("{S}{path}")).json(&body);
+        if let Some(t) = token {
+            r = r.bearer_auth(t);
+        }
+        r.send().await.unwrap().json().await.unwrap()
+    }
+
+    /// Живой сквозной тест: хозяин (ensure_host) ↔ сервер ↔ гость (start_guest), 300 КБ туда-обратно.
+    /// cargo test --lib tunnel_end_to_end_live -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn tunnel_end_to_end_live() {
+        let c = reqwest::Client::builder().no_proxy().build().unwrap();
+        let sfx: u32 = rand_suffix();
+        let pw = "probe-password-1";
+        let h = post(&c, "/api/account/register", json!({"nick": format!("E2eH_{sfx}"), "password": pw}), None).await;
+        let g = post(&c, "/api/account/register", json!({"nick": format!("E2eG_{sfx}"), "password": pw}), None).await;
+        let (ht, gt) = (h["token"].as_str().unwrap().to_string(), g["token"].as_str().unwrap().to_string());
+        post(&c, "/api/friends/request", json!({"nick": format!("E2eG_{sfx}")}), Some(&ht)).await;
+        let gs = post(&c, "/api/friends/sync", json!({}), Some(&gt)).await;
+        post(&c, "/api/friends/respond", json!({"id": gs["requests"][0]["id"], "accept": true}), Some(&gt)).await;
+
+        // «Мир Minecraft» хозяина: эхо с переворотом байтов
+        let world = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let world_port = world.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut s, _) = world.accept().await.unwrap();
+            let mut buf = vec![0u8; 64 * 1024];
+            loop {
+                let n = s.read(&mut buf).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                s.write_all(&buf[..n]).await.unwrap();
+            }
+        });
+
+        let hs = post(&c, "/api/friends/sync", json!({"host": {"relay": true, "world": "E2E", "mc": "1.21.4", "loader": null}}), Some(&ht)).await;
+        let relay = &hs["me"]["relay"];
+        let host_side = Tunnels::new();
+        host_side.ensure_host(S, relay["hostId"].as_str().unwrap(), relay["secret"].as_str().unwrap(), world_port);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let host_user = hs["me"]["id"].as_str().unwrap().to_string();
+        let (c2, gt2) = (c.clone(), gt.clone());
+        let tickets: TicketSource = Arc::new(move || {
+            let (c, gt, id) = (c2.clone(), gt2.clone(), host_user.clone());
+            Box::pin(async move {
+                let r = post(&c, "/api/friends/join", json!({"id": id}), Some(&gt)).await;
+                Ok(r["ticket"].as_str().unwrap().to_string())
+            })
+        });
+        let guest_side = Tunnels::new();
+        let addr = guest_side.start_guest(S, relay["hostId"].as_str().unwrap(), tickets).await.unwrap();
+
+        // «Игра» гостя подключается к локальному адресу
+        let mut game = TcpStream::connect(addr.as_str()).await.unwrap();
+        let payload: Vec<u8> = (0..300 * 1024).map(|i| (i % 251) as u8).collect();
+        let t0 = std::time::Instant::now();
+        let (mut rd, mut wr) = game.split();
+        let send = async { wr.write_all(&payload).await.unwrap() };
+        let recv = async {
+            let mut got = vec![0u8; payload.len()];
+            tokio::time::timeout(Duration::from_secs(30), rd.read_exact(&mut got)).await.unwrap().unwrap();
+            got
+        };
+        let ((), got) = tokio::join!(send, recv);
+        assert_eq!(got, payload);
+        println!("300 КБ туда и обратно через туннель: {} мс", t0.elapsed().as_millis());
+
+        post(&c, "/api/friends/sync", json!({"host": null}), Some(&ht)).await;
+        post(&c, "/api/friends/offline", json!({}), Some(&ht)).await;
+        post(&c, "/api/friends/offline", json!({}), Some(&gt)).await;
+    }
+
+    fn rand_suffix() -> u32 {
+        let mut b = [0u8; 4];
+        getrandom::getrandom(&mut b).unwrap();
+        u32::from_le_bytes(b) % 100_000
     }
 }

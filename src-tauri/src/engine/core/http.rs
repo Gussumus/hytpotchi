@@ -53,7 +53,23 @@ pub struct HttpClient {
 
 impl HttpClient {
     pub fn new() -> Result<Self> {
-        let client = ClientBuilder::new()
+        let mut builder = ClientBuilder::new();
+        // Системный прокси (VPN-программы) — только пока он принимает соединения, иначе напрямую.
+        // Явный .proxy() отключает встроенный автоподхват прокси reqwest, так что решаем сами.
+        match super::proxy::detect() {
+            Some(cfg) => {
+                let live = super::proxy::Liveness::new(cfg);
+                log::info!("Найден прокси {} — используется, пока отвечает", live.url());
+                let target = reqwest::Url::parse(live.url()).context("Некорректный адрес прокси")?;
+                builder = builder.proxy(reqwest::Proxy::custom(move |url| {
+                    // Свой компьютер — всегда напрямую
+                    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"));
+                    (!local && live.alive()).then(|| target.clone())
+                }));
+            }
+            None => builder = builder.no_proxy(),
+        }
+        let client = builder
             .connect_timeout(Duration::from_secs(15))
             .read_timeout(Duration::from_secs(60))
             .pool_max_idle_per_host(32)
