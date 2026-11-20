@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::engine::accounts::microsoft::MicrosoftAuth;
 use crate::engine::accounts::session::{Account, AccountKind, AccountStore};
@@ -38,6 +38,12 @@ pub async fn game_session(
     account: &Account,
 ) -> Result<GameAccount> {
     if account.kind == AccountKind::Offline {
+        bail!(
+            "Офлайн-аккаунты больше не поддерживаются. Откройте «Аккаунты» и зарегистрируйте ник {} в Hytpotchi — скин сохранится",
+            account.username
+        );
+    }
+    if account.kind == AccountKind::Hytpotchi {
         return Ok(GameAccount {
             uuid: account.uuid.clone(),
             username: account.username.clone(),

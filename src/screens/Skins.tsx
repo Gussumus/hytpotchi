@@ -21,7 +21,8 @@ export function Skins() {
   const [shared, setShared] = useState<SharedStatus | null>(null)
   const [emote, setEmote] = useState<EmoteId>('idle')
   const [tryOn, setTryOn] = useState<LibrarySkin | null>(null)
-  const isOffline = account?.kind === 'offline'
+  // Аккаунт Hytpotchi: скин из библиотеки публикуется на сервер Hytpotchi
+  const isOffline = account?.kind === 'hytpotchi' || account?.kind === 'offline'
   const backToIdle = useCallback(() => setEmote('idle'), [])
   const poke = useCallback(() => setEmote(POKES[Math.floor(Math.random() * POKES.length)]), [])
 

@@ -2,12 +2,13 @@ import { activeAccount, useStore, type Screen } from '../store'
 import { loaderName } from '../lib/format'
 import { Avatar } from './Avatar'
 import { InstanceArt } from './InstanceArt'
-import { IconCompass, IconHome, IconPlus, IconSettings, IconShirt, IconUser } from './Icons'
+import { IconCompass, IconHome, IconPlus, IconSettings, IconShirt, IconUser, IconUsers } from './Icons'
 import type { Instance } from '../lib/types'
 
 const NAV: { id: Screen; label: string; icon: typeof IconHome }[] = [
   { id: 'home', label: 'Главная', icon: IconHome },
   { id: 'content', label: 'Каталог', icon: IconCompass },
+  { id: 'friends', label: 'Друзья', icon: IconUsers },
   { id: 'skins', label: 'Скины', icon: IconShirt },
   { id: 'accounts', label: 'Аккаунты', icon: IconUser },
   { id: 'settings', label: 'Настройки', icon: IconSettings },
@@ -22,6 +23,9 @@ export function Sidebar() {
   const setModal = useStore((s) => s.setModal)
   const progress = useStore((s) => s.progress)
   const account = useStore(activeAccount)
+  const snapshot = useStore((s) => s.friends?.snapshot)
+  const friendsBadge = (snapshot?.requests.length ?? 0) + (snapshot?.invites.length ?? 0)
+  const onlineFriends = snapshot?.friends.filter((f) => f.online).length ?? 0
 
   return (
     <aside className="sidebar">
@@ -30,6 +34,8 @@ export function Sidebar() {
           <button key={id} className={`nav-item ${screen === id ? 'on' : ''}`} onClick={() => setScreen(id)}>
             <Icon size={18} />
             <span>{label}</span>
+            {id === 'friends' && friendsBadge > 0 && <span className="nav-badge">{friendsBadge}</span>}
+            {id === 'friends' && friendsBadge === 0 && onlineFriends > 0 && <span className="nav-online">{onlineFriends}</span>}
           </button>
         ))}
       </nav>
@@ -81,7 +87,7 @@ export function Sidebar() {
         <Avatar account={account} size={34} />
         <div className="account-chip-text">
           <strong>{account?.username ?? 'Нет аккаунта'}</strong>
-          <span>{account ? (account.kind === 'microsoft' ? 'Microsoft' : 'Офлайн') : 'Нажмите, чтобы войти'}</span>
+          <span>{account ? (account.kind === 'microsoft' ? 'Microsoft' : account.kind === 'hytpotchi' ? 'Hytpotchi' : 'Нужен перенос в Hytpotchi') : 'Нажмите, чтобы войти'}</span>
         </div>
       </button>
     </aside>

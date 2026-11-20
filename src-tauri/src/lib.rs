@@ -32,7 +32,16 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
-            "quit" => app.exit(0),
+            "quit" => {
+                // Сначала сообщаем друзьям, что вышли (не дольше 3 с), потом закрываемся
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(svc) = app.try_state::<std::sync::Arc<engine::friends::FriendsService>>() {
+                        svc.go_offline(&app).await;
+                    }
+                    app.exit(0);
+                });
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -76,7 +85,10 @@ pub fn run() {
             commands::accounts::microsoft_auth_start,
             commands::accounts::microsoft_auth_poll,
             commands::accounts::microsoft_refresh_token,
-            commands::accounts::account_add_offline,
+            commands::accounts::hytpotchi_register,
+            commands::accounts::hytpotchi_login,
+            commands::accounts::hytpotchi_recover,
+            commands::accounts::hytpotchi_change_password,
             commands::accounts::account_list,
             commands::accounts::account_remove,
             commands::accounts::account_set_active,
@@ -155,12 +167,16 @@ pub fn run() {
             commands::cloud::sync_pull,
             commands::cloud::sync_status,
             // Друзья
-            commands::friends::friend_list,
-            commands::friends::friend_add,
-            commands::friends::friend_remove,
-            commands::friends::friend_accept,
-            commands::friends::friend_block,
-            commands::friends::presence_list,
+            commands::friends::friends_state,
+            commands::friends::friends_refresh,
+            commands::friends::friends_settings,
+            commands::friends::friends_request,
+            commands::friends::friends_respond,
+            commands::friends::friends_remove,
+            commands::friends::friends_invite,
+            commands::friends::friends_dismiss,
+            commands::friends::friends_join,
+            commands::friends::friends_sync_pack,
             // Голос
             commands::voice::call_start,
             commands::voice::call_join,
@@ -194,6 +210,19 @@ pub fn run() {
             app.manage(engine::accounts::AccountStore::load(&root)?);
             app.manage(engine::game::GameWatcher::new());
             app.manage(engine::core::http::HttpClient::new()?);
+
+            // Друзья: фоновая синхронизация статусов и приглашений
+            let friends = engine::friends::FriendsService::new();
+            app.manage(friends.clone());
+            friends.start(app.handle().clone());
+
+            // Свои фоны показываются через asset-протокол. Разрешаем папку и в рантайме:
+            // статический scope в tauri.conf.json не знает про HYTPOTCHI_HOME.
+            let backgrounds = root.join("backgrounds");
+            std::fs::create_dir_all(&backgrounds)?;
+            if let Err(e) = app.asset_protocol_scope().allow_directory(&backgrounds, false) {
+                log::warn!("Не удалось открыть доступ к папке фонов: {e}");
+            }
 
             build_tray(app)?;
             log::info!("Hytpotchi запущен, данные: {}", root.display());

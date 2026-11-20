@@ -192,7 +192,7 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
             .shared_skins
             .then(crate::engine::core::settings::skin_server)
             .flatten();
-        let own_skin = if account.kind == AccountKind::Offline {
+        let own_skin = if account.kind == AccountKind::Hytpotchi {
             account
                 .offline_skin
                 .as_deref()
@@ -200,7 +200,7 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
         } else {
             None
         };
-        if account.kind == AccountKind::Offline && own_skin.is_none() {
+        if account.kind == AccountKind::Hytpotchi && own_skin.is_none() {
             offline_skin::clear(&game_dir, &account.username);
         }
 
@@ -226,6 +226,15 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
                 "Офлайн-скин работает только в сборках с загрузчиком (Fabric, Forge, NeoForge или Quilt)".into(),
             ),
             _ => {}
+        }
+    }
+
+    // 6½. Игра с друзьями: e4mc превращает «Открыть для сети» в адрес, доступный из интернета
+    if instance.loader.is_some() && crate::engine::core::settings::load().friends_hosting {
+        match crate::commands::content::ensure_project(&http, &instance, crate::engine::friends::E4MC_PROJECT).await {
+            Ok(true) => console("Установлен e4mc — «Открыть для сети» откроет мир друзьям через интернет".into()),
+            Ok(false) => {}
+            Err(e) => console(format!("e4mc не установлен (мир будет доступен только в локальной сети): {e:#}")),
         }
     }
 

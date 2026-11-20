@@ -197,6 +197,14 @@ impl SecretsVault {
     pub async fn get_secret(&self, key: &str) -> Option<String> {
         self.cache.read().await.secrets.get(key).cloned()
     }
+
+    /// Удалить произвольный секрет
+    pub async fn remove_secret(&self, key: &str) -> Result<()> {
+        if self.cache.write().await.secrets.remove(key).is_some() {
+            self.save().await?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "windows")]

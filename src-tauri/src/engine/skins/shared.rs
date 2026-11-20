@@ -1,48 +1,25 @@
-//! Общие офлайн-скины: публикация на сервер скинов Hytpotchi
+//! Общие скины: публикация скина аккаунта Hytpotchi на сервер Hytpotchi.
+//! Скин для ника принимает только владелец аккаунта с этим ником.
 
 use anyhow::{Result, bail};
 
+use crate::engine::accounts::hytpotchi;
+use crate::engine::accounts::session::Account;
 use crate::engine::core::http::HttpClient;
 use crate::secrets::SecretsVault;
 
-fn claim_key(username: &str) -> String {
-    format!("skin-claim:{}", username.to_lowercase())
-}
-
-/// Секретный ключ владения ником (создаётся при первой публикации)
-async fn token_for(vault: &SecretsVault, username: &str) -> Result<String> {
-    let key = claim_key(username);
-    if let Some(token) = vault.get_secret(&key).await {
-        return Ok(token);
-    }
-    let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes)?;
-    let token = hex::encode(bytes);
-    vault.set_secret(&key, token.clone()).await?;
-    Ok(token)
-}
-
-async fn server_error(resp: reqwest::Response) -> anyhow::Error {
-    let status = resp.status();
-    let message = resp
-        .json::<serde_json::Value>()
-        .await
-        .ok()
-        .and_then(|v| v["error"].as_str().map(str::to_string))
-        .unwrap_or_else(|| format!("ошибка сервера ({status})"));
-    anyhow::anyhow!(message)
-}
 
 /// Загрузить скин на сервер, чтобы его видели другие игроки
 pub async fn publish(
     http: &HttpClient,
     vault: &SecretsVault,
     server: &str,
-    username: &str,
+    account: &Account,
     png: Vec<u8>,
     slim: bool,
 ) -> Result<()> {
-    let token = token_for(vault, username).await?;
+    let token = hytpotchi::token(vault, account).await?;
+    let username = account.username.as_str();
     let url = format!(
         "{server}/api/skins/{}?model={}",
         urlencoding::encode(username),
@@ -58,16 +35,17 @@ pub async fn publish(
         .await
         .map_err(|_| anyhow::anyhow!("Сервер скинов недоступен"))?;
     if !resp.status().is_success() {
-        return Err(server_error(resp).await);
+        return Err(hytpotchi::server_error(resp).await);
     }
     Ok(())
 }
 
 /// Убрать скин с сервера (ник остаётся за вами)
-pub async fn unpublish(http: &HttpClient, vault: &SecretsVault, server: &str, username: &str) -> Result<()> {
-    let Some(token) = vault.get_secret(&claim_key(username)).await else {
+pub async fn unpublish(http: &HttpClient, vault: &SecretsVault, server: &str, account: &Account) -> Result<()> {
+    let Ok(token) = hytpotchi::token(vault, account).await else {
         return Ok(());
     };
+    let username = account.username.as_str();
     let resp = http
         .client
         .delete(format!("{server}/api/skins/{}", urlencoding::encode(username)))
@@ -75,7 +53,7 @@ pub async fn unpublish(http: &HttpClient, vault: &SecretsVault, server: &str, us
         .send()
         .await?;
     if !resp.status().is_success() {
-        return Err(server_error(resp).await);
+        return Err(hytpotchi::server_error(resp).await);
     }
     Ok(())
 }

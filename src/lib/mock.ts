@@ -1,4 +1,5 @@
 // Демо-бэкенд для предпросмотра интерфейса в обычном браузере (без Tauri).
+import type { Friend, FriendInvite, FriendPerson, FriendsState, FriendStatus } from './types'
 import type { Account, Instance, LaunchStage, LocalContent, SearchHit } from './types'
 
 type Handler = (payload: unknown) => void
@@ -71,7 +72,8 @@ let sharedServer: string | null = null
 let sharedEnabled = true
 
 let accounts: Account[] = [
-  { id: 'acc-1', username: 'Hytpotchi', uuid: 'b50ad385829d3141a2167e7d7539ba7f', kind: 'offline', active: true, skinUrl: null },
+  { id: 'acc-1', username: 'Hytpotchi', uuid: 'b50ad385829d3141a2167e7d7539ba7f', kind: 'hytpotchi', active: true, skinUrl: null },
+  { id: 'acc-old', username: 'OldNick', uuid: '0f0f0f0f0f0f30008000000000000000', kind: 'offline', active: false, skinUrl: null },
 ]
 
 const hits: SearchHit[] = [
@@ -143,7 +145,81 @@ async function fakeLaunch(id: string) {
   }
 }
 
-const mockBackgrounds: { id: string; name: string; kind: string; path: string; file: string }[] = []
+const mockFriends: {
+  account: string | null
+  enabled: boolean
+  status: FriendStatus
+  hosting: boolean
+  friends: Friend[]
+  requests: FriendPerson[]
+  outgoing: FriendPerson[]
+  invites: FriendInvite[]
+} = {
+  account: 'Hytpotchi',
+  enabled: true,
+  status: 'online',
+  hosting: true,
+  friends: [
+    {
+      id: 'f1',
+      nick: 'Liza',
+      online: true,
+      status: 'online',
+      activity: { instance: 'Выживание', mc: '1.21.4', loader: 'fabric' },
+      host: { relay: true, world: 'Остров', mc: '1.21.4', loader: 'fabric', pack: 'f'.repeat(64), mods: 12 },
+      lastSeen: Date.now(),
+    },
+    {
+      id: 'f2',
+      nick: 'Maks_Q',
+      online: true,
+      status: 'busy',
+      activity: { instance: 'Техно-сборка', mc: '1.12.2', loader: null },
+      host: null,
+      lastSeen: Date.now(),
+    },
+    { id: 'f3', nick: 'Timur', online: false, status: 'offline', activity: null, host: null, lastSeen: Date.now() - 3 * 3600e3 },
+  ],
+  requests: [{ id: 'r1', nick: 'Danya', at: Date.now() - 600e3 }],
+  outgoing: [],
+  invites: [
+    {
+      id: 'i1',
+      from: 'f1',
+      fromNick: 'Liza',
+      at: Date.now(),
+      address: null,
+      relay: true,
+      pack: 'f'.repeat(64),
+      instance: { name: 'Выживание', mc: '1.21.4', loader: 'fabric' },
+      note: 'Заходи, строим базу!',
+    },
+  ],
+}
+
+function mockFriendsState(): FriendsState {
+  const f = mockFriends
+  return structuredClone({
+    enabled: f.enabled,
+    configured: true,
+    account: f.account,
+    hostOnlineMode: false,
+    status: f.status,
+    hosting: f.hosting,
+    error: null,
+    syncing: false,
+    hosted: [],
+    snapshot: {
+      me: { id: 'me', nick: f.account ?? 'Hytpotchi' },
+      friends: f.friends,
+      requests: f.requests,
+      outgoing: f.outgoing,
+      invites: f.invites,
+    },
+  })
+}
+
+const mockBackgrounds:{ id: string; name: string; kind: string; path: string; file: string }[] = []
 
 function pickBrowserFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
@@ -219,10 +295,36 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
       return r([])
     case 'account_list':
       return r(accounts.map((a) => ({ ...a })))
-    case 'account_add_offline': {
-      const acc: Account = { id: `acc-${Date.now()}`, username: String(args.username), uuid: '00000000000030008000000000000000', kind: 'offline', active: true, skinUrl: null }
-      accounts = [...accounts.map((a) => ({ ...a, active: false })), acc]
-      return r(acc)
+    case 'hytpotchi_register':
+    case 'hytpotchi_login':
+    case 'hytpotchi_recover': {
+      const nick = String(args.nick)
+      if (cmd === 'hytpotchi_register' && ['Notch', 'Steve'].includes(nick)) throw new Error('Этот ник уже занят')
+      if (cmd === 'hytpotchi_login' && String(args.password).length < 8) throw new Error('Неверный ник или пароль')
+      const acc: Account = { id: `acc-${Date.now()}`, username: nick, uuid: '00000000000030008000000000000000', kind: 'hytpotchi', active: true, skinUrl: null }
+      const old = accounts.find((a) => a.id === args.replace)
+      if (old) acc.offlineSkin = old.offlineSkin
+      accounts = [...accounts.filter((a) => a.id !== args.replace).map((a) => ({ ...a, active: false })), acc]
+      mockFriends.account = nick
+      if (cmd === 'hytpotchi_login') return r(acc)
+      return r({ account: acc, recovery: 'K7QP-2WXM-9FHT-4NCD' })
+    }
+    case 'hytpotchi_change_password':
+      return r(undefined)
+    case 'friends_join':
+      return r('127.0.0.1:52811')
+    case 'friends_sync_pack': {
+      const total = 12
+      for (let i = 0; i <= total; i++) {
+        emit('modpack-progress', { label: 'Скачиваем моды друга', done: i, total, job: args.job })
+        await sleep(120)
+      }
+      let inst = instances.find((x) => x.name === 'Сборка Liza')
+      if (!inst) {
+        inst = { ...instances[0], id: `inst-friend-${Date.now()}`, name: 'Сборка Liza', gameVersion: '1.21.4', loader: 'fabric', running: false }
+        instances = [...instances, inst]
+      }
+      return r(inst)
     }
     case 'account_set_active':
       accounts = accounts.map((a) => ({ ...a, active: a.id === args.accountId }))
@@ -407,6 +509,38 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
     case 'instance_open_folder':
     case 'open_data_folder':
       return r(undefined)
+    // Друзья в демо-режиме
+    case 'friends_state':
+    case 'friends_refresh':
+      return r(mockFriendsState())
+    case 'friends_settings': {
+      if (typeof args.enabled === 'boolean') mockFriends.enabled = args.enabled
+      if (typeof args.status === 'string') mockFriends.status = args.status as FriendStatus
+      if (typeof args.hosting === 'boolean') mockFriends.hosting = args.hosting
+      return r(mockFriendsState())
+    }
+    case 'friends_request': {
+      const nick = String(args.nick)
+      if (nick === 'Ghost') throw new Error(`Игрок ${nick} не зарегистрирован в Hytpotchi`)
+      mockFriends.outgoing.push({ id: `o${nick}`, nick, at: now })
+      return r(mockFriendsState())
+    }
+    case 'friends_respond': {
+      const req = mockFriends.requests.find((q) => q.id === args.id)
+      mockFriends.requests = mockFriends.requests.filter((q) => q.id !== args.id)
+      if (req && args.accept)
+        mockFriends.friends.push({ ...req, online: true, status: 'online', activity: null, host: null, lastSeen: now })
+      return r(mockFriendsState())
+    }
+    case 'friends_remove':
+      mockFriends.friends = mockFriends.friends.filter((f) => f.id !== args.id)
+      mockFriends.outgoing = mockFriends.outgoing.filter((f) => f.id !== args.id)
+      return r(mockFriendsState())
+    case 'friends_invite':
+      return r(mockFriendsState())
+    case 'friends_dismiss':
+      mockFriends.invites = mockFriends.invites.filter((i) => i.id !== args.id)
+      return r(mockFriendsState())
     // Свои фоны в демо-режиме: файл выбирается браузерным диалогом и живёт до перезагрузки
     case 'background_list':
       return r([...mockBackgrounds])

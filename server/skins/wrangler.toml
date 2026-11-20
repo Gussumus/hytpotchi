@@ -7,3 +7,22 @@ compatibility_date = "2025-01-01"
 [[kv_namespaces]]
 binding = "SKINS"
 id = "6c8b559bedd140e797da62329c134440"
+
+# Друзья: заявки, статусы и приглашения в игру. Один Durable Object на весь сервер,
+# хранилище SQLite (есть на бесплатном тарифе). Создаётся сам при wrangler deploy.
+[[durable_objects.bindings]]
+name = "FRIENDS"
+class_name = "FriendsHub"
+
+[[migrations]]
+tag = "v1-friends"
+new_sqlite_classes = ["FriendsHub"]
+
+# Туннель «играть вместе без модов»: по одному Durable Object на открытый мир.
+[[durable_objects.bindings]]
+name = "TUNNEL"
+class_name = "TunnelRelay"
+
+[[migrations]]
+tag = "v2-tunnel"
+new_sqlite_classes = ["TunnelRelay"]

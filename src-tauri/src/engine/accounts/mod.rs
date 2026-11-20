@@ -1,5 +1,6 @@
 //! Аккаунты: Microsoft и офлайн
 
+pub mod hytpotchi;
 pub mod microsoft;
 pub mod millida;
 pub mod session;

@@ -14,6 +14,7 @@ import { Content } from './screens/Content'
 import { Accounts } from './screens/Accounts'
 import { Settings } from './screens/Settings'
 import { Skins } from './screens/Skins'
+import { Friends } from './screens/Friends'
 
 export default function App() {
   const screen = useStore((s) => s.screen)
@@ -34,6 +35,7 @@ export default function App() {
           {screen === 'home' && <Home />}
           {screen === 'instance' && <InstanceScreen />}
           {screen === 'content' && <Content />}
+          {screen === 'friends' && <Friends />}
           {screen === 'skins' && <Skins />}
           {screen === 'accounts' && <Accounts />}
           {screen === 'settings' && <Settings />}

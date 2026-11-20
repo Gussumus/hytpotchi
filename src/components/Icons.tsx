@@ -30,6 +30,9 @@ import {
   Square,
   SquareTerminal,
   Trash2,
+  UserPlus,
+  Users,
+  Send,
   TriangleAlert,
   Upload,
   X,
@@ -88,6 +91,9 @@ export const IconArrowRight = icon(ArrowRight)
 export const IconShirt = icon(Shirt)
 export const IconServer = icon(Server)
 export const IconRefresh = icon(RefreshCw)
+export const IconUsers = icon(Users)
+export const IconUserPlus = icon(UserPlus)
+export const IconSend = icon(Send)
 
 /** Логотип Microsoft (для кнопки входа) */
 export const IconMicrosoft = ({ size = 18 }: { size?: number }) => (

@@ -31,9 +31,9 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$APPDATA/.hytpotchi/instances/*/minecraft/screenshots/**",
-          "$APPDATA/.hytpotchi/instances/*/cover-*",
-          "$APPDATA/.hytpotchi/backgrounds/*"
+          "$DATA/.hytpotchi/instances/*/minecraft/screenshots/**",
+          "$DATA/.hytpotchi/instances/*/cover-*",
+          "$DATA/.hytpotchi/backgrounds/*"
         ]
       }
     }

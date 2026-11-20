@@ -14,6 +14,19 @@ pub struct LauncherSettings {
     /// Показывать скины других игроков Hytpotchi (ставит CustomSkinLoader в сборки с загрузчиком)
     #[serde(default = "yes")]
     pub shared_skins: bool,
+    /// Друзья включены (синхронизация с сервером Hytpotchi)
+    #[serde(default = "yes")]
+    pub friends: bool,
+    /// Статус для друзей: online | busy | invisible
+    #[serde(default = "online")]
+    pub friends_status: String,
+    /// Ставить e4mc в сборки с загрузчиком, чтобы «Открыть для сети» открывало мир друзьям через интернет
+    #[serde(default)]
+    pub friends_hosting: bool,
+}
+
+fn online() -> String {
+    "online".into()
 }
 
 fn yes() -> bool {
@@ -22,7 +35,13 @@ fn yes() -> bool {
 
 impl Default for LauncherSettings {
     fn default() -> Self {
-        Self { skin_server: None, shared_skins: true }
+        Self {
+            skin_server: None,
+            shared_skins: true,
+            friends: true,
+            friends_status: online(),
+            friends_hosting: false,
+        }
     }
 }
 

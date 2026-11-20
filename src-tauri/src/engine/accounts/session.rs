@@ -11,7 +11,18 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum AccountKind {
     Microsoft,
+    /// Аккаунт Hytpotchi: уникальный ник с паролем на сервере Hytpotchi
+    Hytpotchi,
+    /// Старый офлайн-аккаунт (любой ник без пароля). Играть им больше нельзя —
+    /// только перенести ник в аккаунт Hytpotchi.
     Offline,
+}
+
+impl AccountKind {
+    /// Вход в игру без Microsoft (UUID из ника, токен "0")
+    pub fn offline_mode(self) -> bool {
+        matches!(self, Self::Hytpotchi | Self::Offline)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

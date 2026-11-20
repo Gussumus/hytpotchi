@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State, command};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::engine::accounts::session::{AccountKind, AccountStore};
+use crate::engine::accounts::session::AccountStore;
 use crate::engine::accounts::vault::{TokenVault, game_session};
 use crate::engine::core::http::HttpClient;
 use crate::engine::core::paths::app_dir;
@@ -50,7 +50,7 @@ async fn token(
     account_id: &str,
 ) -> Result<String> {
     let account = store.get(account_id).context("Аккаунт не найден")?;
-    if account.kind == AccountKind::Offline {
+    if account.kind.offline_mode() {
         bail!("Плащи и загрузка скина на серверы Mojang доступны только для аккаунтов Microsoft");
     }
     Ok(game_session(http, vault, store, &account).await?.access_token)
@@ -177,7 +177,8 @@ fn offline_profile(account: &crate::engine::accounts::session::Account) -> SkinP
 }
 
 fn offline_account(store: &AccountStore, account_id: &str) -> Option<crate::engine::accounts::session::Account> {
-    store.get(account_id).filter(|a| a.kind == AccountKind::Offline)
+    // Скин из библиотеки + общий сервер — у аккаунтов Hytpotchi (и у старых офлайн, чтобы показать их скин)
+    store.get(account_id).filter(|a| a.kind.offline_mode())
 }
 
 #[command]
@@ -326,7 +327,7 @@ pub async fn skin_apply(
         let mut profile = offline_profile(&account);
         // Публикуем на общий сервер, чтобы скин видели другие игроки Hytpotchi
         profile.shared = Some(match crate::engine::core::settings::skin_server() {
-            Some(server) => match shared::publish(&http, &vault, &server, &account.username, bytes, slim).await {
+            Some(server) => match shared::publish(&http, &vault, &server, &account, bytes, slim).await {
                 Ok(()) => SharedStatus::published(),
                 Err(e) => SharedStatus::failed(format!("{e:#}")),
             },
@@ -353,7 +354,7 @@ pub async fn skin_reset(
     if offline_account(&store, &account_id).is_some() {
         let account = store.set_offline_skin(&account_id, None).map_err(err)?;
         if let Some(server) = crate::engine::core::settings::skin_server() {
-            if let Err(e) = shared::unpublish(&http, &vault, &server, &account.username).await {
+            if let Err(e) = shared::unpublish(&http, &vault, &server, &account).await {
                 log::warn!("Не удалось убрать скин с сервера: {e:#}");
             }
         }
@@ -465,7 +466,8 @@ pub async fn shared_skins_set(
         }
         None => None,
     };
-    settings::save(&LauncherSettings { skin_server: server, shared_skins: enabled }).map_err(err)?;
+    // Остальные настройки (например, друзей) не трогаем
+    settings::save(&LauncherSettings { skin_server: server, shared_skins: enabled, ..settings::load() }).map_err(err)?;
     shared_skins_get().await
 }
 
@@ -477,12 +479,12 @@ pub async fn skin_publish(
     store: State<'_, AccountStore>,
     account_id: String,
 ) -> CmdResult<SharedStatus> {
-    let account = offline_account(&store, &account_id).ok_or("Публикация нужна только офлайн-аккаунтам")?;
+    let account = offline_account(&store, &account_id).ok_or("Публикация нужна только аккаунтам Hytpotchi")?;
     let skin_id = account.offline_skin.clone().ok_or("Сначала наденьте скин")?;
     let bytes = library_skin_bytes(&skin_id).map_err(err)?;
     let slim = account.offline_variant.as_deref() == Some("slim");
     Ok(match settings::skin_server() {
-        Some(server) => match shared::publish(&http, &vault, &server, &account.username, bytes, slim).await {
+        Some(server) => match shared::publish(&http, &vault, &server, &account, bytes, slim).await {
             Ok(()) => SharedStatus::published(),
             Err(e) => SharedStatus::failed(format!("{e:#}")),
         },

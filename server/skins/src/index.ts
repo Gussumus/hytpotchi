@@ -1,19 +1,37 @@
 /**
- * Hytpotchi Skin Server — Cloudflare Worker.
+ * Сервер Hytpotchi — Cloudflare Worker.
  *
- * Отдаёт скины в формате CustomSkinLoader (CustomSkinAPI):
+ * Скины в формате CustomSkinLoader (CustomSkinAPI):
  *   GET  /{ник}.json           → {"username": "...", "skins": {"default"|"slim": "<hash>"}}
  *   GET  /textures/{hash}      → PNG
- * Принимает скины от лаунчера:
- *   PUT    /api/skins/{ник}?model=slim|default   (тело — PNG, Authorization: Bearer <ключ>)
- *   DELETE /api/skins/{ник}                       (Authorization: Bearer <ключ>)
+ * Загрузка скина владельцем ника (токен аккаунта Hytpotchi):
+ *   PUT    /api/skins/{ник}?model=slim|default   (тело — PNG, Authorization: Bearer <токен>)
+ *   DELETE /api/skins/{ник}
  *
- * Ник закрепляется за первым, кто загрузил на него скин: на сервере хранится
- * SHA-256 его секретного ключа. Чужой ник перезаписать нельзя.
+ * Аккаунты и друзья — Durable Object FriendsHub (см. hub.ts):
+ *   POST /api/account/*, POST /api/friends/*
+ * Туннель «играть вместе без модов» — Durable Object TunnelRelay на каждый мир (см. tunnel.ts):
+ *   GET  /api/tunnel/{hostId}/control|data|join   (WebSocket)
+ *
+ * Ник принадлежит аккаунту Hytpotchi: скин для зарегистрированного ника может загрузить только
+ * его владелец, поэтому скины не путаются. Старые лаунчеры (до аккаунтов) публикуют скин по-прежнему —
+ * ключом, закреплённым за ником, — но только под ником, который никто не зарегистрировал.
  */
+
+export { FriendsHub } from './hub.ts'
+export { TunnelRelay } from './tunnel.ts'
+
+interface DONamespace {
+  idFromName(name: string): unknown
+  get(id: unknown): { fetch(req: Request): Promise<Response> }
+}
 
 export interface Env {
   SKINS: KVNamespace
+  /** Аккаунты и друзья. Может отсутствовать на старом развёртывании */
+  FRIENDS?: DONamespace
+  /** Туннели для совместной игры */
+  TUNNEL?: DONamespace
 }
 
 interface Profile {
@@ -53,17 +71,49 @@ function validPng(bytes: Uint8Array): boolean {
   return w === 64 && (h === 64 || h === 32)
 }
 
-async function authorize(request: Request, env: Env, key: string): Promise<'ok' | 'new' | 'denied'> {
+const hubOf = (env: Env) => env.FRIENDS!.get(env.FRIENDS!.idFromName('hub'))
+
+/** Кто может менять скин ника: владелец аккаунта, никто (ник занят) или старый ключ (ник свободен) */
+async function nickAccess(request: Request, env: Env, nick: string): Promise<'owner' | 'taken' | 'free'> {
+  if (!env.FRIENDS) return 'free'
+  const hub = hubOf(env)
+  const who = await hub.fetch(
+    new Request('https://hub/internal/whoami', {
+      method: 'POST',
+      headers: { authorization: request.headers.get('authorization') ?? '' },
+    }),
+  )
+  if (who.ok) {
+    const { user } = (await who.json()) as { user: { nick: string } }
+    if (user.nick.toLowerCase() === nick.toLowerCase()) return 'owner'
+  }
+  const reg = await hub.fetch(
+    new Request('https://hub/internal/nick', { method: 'POST', body: JSON.stringify({ nick }) }),
+  )
+  const { registered } = (await reg.json()) as { registered: boolean }
+  return registered ? 'taken' : 'free'
+}
+
+/** Старый способ (лаунчеры до аккаунтов): ник закрепляется за первым ключом */
+async function legacyClaim(request: Request, env: Env, key: string): Promise<boolean> {
   const auth = request.headers.get('authorization') ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
-  if (token.length < 32 || token.length > 256) return 'denied'
+  if (token.length < 32 || token.length > 256) return false
   const tokenHash = await sha256Hex(new TextEncoder().encode(token))
   const claim = await env.SKINS.get(`claim:${key}`)
   if (claim === null) {
     await env.SKINS.put(`claim:${key}`, tokenHash)
-    return 'new'
+    return true
   }
-  return claim === tokenHash ? 'ok' : 'denied'
+  return claim === tokenHash
+}
+
+/** Можно ли этому запросу менять скин ника */
+async function mayEditSkin(request: Request, env: Env, nick: string): Promise<boolean> {
+  const access = await nickAccess(request, env, nick)
+  if (access === 'owner') return true
+  if (access === 'taken') return false
+  return legacyClaim(request, env, nick.toLowerCase())
 }
 
 export default {
@@ -72,7 +122,32 @@ export default {
     const path = decodeURIComponent(url.pathname)
 
     if (request.method === 'GET' && path === '/') {
-      return json({ service: 'hytpotchi-skins', ok: true }, 200, 'public, max-age=60')
+      return json(
+        { service: 'hytpotchi-skins', ok: true, friends: !!env.FRIENDS, accounts: !!env.FRIENDS, tunnel: !!env.TUNNEL },
+        200,
+        'public, max-age=60',
+      )
+    }
+
+    if (path.startsWith('/api/friends/') || path.startsWith('/api/account/')) {
+      if (!env.FRIENDS) return error('Аккаунты на этом сервере не включены — обновите его (wrangler deploy)', 501)
+      const res = await hubOf(env).fetch(request)
+      // Новый владелец ника — старый скин с этим ником (от прежних офлайн-игроков) убираем
+      if (path === '/api/account/register' && res.ok) {
+        const body = (await res.clone().json()) as { user?: { nick?: string } }
+        const nick = body.user?.nick?.toLowerCase()
+        if (nick) {
+          await env.SKINS.delete(`profile:${nick}`)
+          await env.SKINS.delete(`claim:${nick}`)
+        }
+      }
+      return res
+    }
+
+    const tunnel = /^\/api\/tunnel\/([0-9a-f]{24})\/(control|data|join)$/.exec(path)
+    if (tunnel) {
+      if (!env.TUNNEL) return error('Туннель на этом сервере не включён — обновите его (wrangler deploy)', 501)
+      return env.TUNNEL.get(env.TUNNEL.idFromName(tunnel[1])).fetch(request)
     }
 
     // Профиль для CustomSkinLoader
@@ -98,7 +173,7 @@ export default {
       })
     }
 
-    // Загрузка / удаление скина
+    // Загрузка / удаление скина — только владелец ника
     const apiMatch = /^\/api\/skins\/([^/]+)$/.exec(path)
     if (apiMatch) {
       const name = apiMatch[1]
@@ -108,19 +183,18 @@ export default {
       if (request.method === 'PUT') {
         const bytes = new Uint8Array(await request.arrayBuffer())
         if (!validPng(bytes)) return error('Нужен PNG 64×64 или 64×32 до 64 КБ', 400)
-        const auth = await authorize(request, env, key)
-        if (auth === 'denied') return error('Этот ник уже занят другим игроком Hytpotchi', 403)
+        if (!(await mayEditSkin(request, env, name)))
+          return error('Скин для этого ника может загрузить только его владелец — войдите в аккаунт Hytpotchi', 403)
         const hash = await sha256Hex(bytes)
         const model = url.searchParams.get('model') === 'slim' ? 'slim' : 'default'
         await env.SKINS.put(`tex:${hash}`, bytes)
         const profile: Profile = { username: name, model, hash, updated: new Date().toISOString() }
         await env.SKINS.put(`profile:${key}`, JSON.stringify(profile))
-        return json({ ok: true, claimed: auth === 'new', hash })
+        return json({ ok: true, hash })
       }
 
       if (request.method === 'DELETE') {
-        const auth = await authorize(request, env, key)
-        if (auth === 'denied') return error('Этот ник принадлежит другому игроку', 403)
+        if (!(await mayEditSkin(request, env, name))) return error('Этот ник принадлежит другому игроку', 403)
         await env.SKINS.delete(`profile:${key}`)
         return json({ ok: true })
       }

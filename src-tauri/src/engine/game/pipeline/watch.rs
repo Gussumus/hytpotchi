@@ -10,6 +10,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Child;
 use tokio::sync::oneshot;
 
+use crate::engine::friends::presence::{self, HostedWorld, LogEvent};
 use crate::engine::game::crashcause::{self, CrashHint};
 
 const LOG_LIMIT: usize = 5000;
@@ -43,6 +44,10 @@ struct State {
     running: HashMap<String, Running>,
     preparing: HashSet<String>,
     logs: HashMap<String, VecDeque<String>>,
+    /// Мир, открытый для друзей (e4mc или LAN), по id сборки
+    hosted: HashMap<String, HostedWorld>,
+    /// Последний загруженный мир по id сборки
+    worlds: HashMap<String, String>,
 }
 
 /// Реестр запущенных игр (по id сборки)
@@ -100,6 +105,49 @@ impl GameWatcher {
             .get(instance_id)
             .map(|l| l.iter().cloned().collect())
             .unwrap_or_default()
+    }
+
+    /// Открытые для друзей миры запущенных сборок
+    pub fn hosted(&self) -> HashMap<String, HostedWorld> {
+        self.state.lock().hosted.clone()
+    }
+
+    /// Разобрать строку лога: открыт/закрыт мир для друзей. true — если что-то поменялось.
+    fn observe(&self, instance_id: &str, line: &str) -> bool {
+        let Some(event) = presence::parse_line(line) else { return false };
+        let mut s = self.state.lock();
+        let world = s.worlds.get(instance_id).cloned();
+        match event {
+            LogEvent::World(name) => {
+                s.worlds.insert(instance_id.to_string(), name.clone());
+                if let Some(h) = s.hosted.get_mut(instance_id) {
+                    if h.world.as_deref() != Some(&name) {
+                        h.world = Some(name);
+                        return true;
+                    }
+                }
+                false
+            }
+            LogEvent::Hosted { address, lan } => {
+                let port = s.hosted.get(instance_id).and_then(|h| h.port);
+                s.hosted.insert(instance_id.to_string(), HostedWorld { address, world, lan, port });
+                true
+            }
+            LogEvent::LanPort(port) => {
+                // Если e4mc уже выдал адрес из интернета, только запоминаем порт
+                if let Some(h) = s.hosted.get_mut(instance_id).filter(|h| !h.lan) {
+                    h.port = Some(port);
+                    return false;
+                }
+                let ip = presence::local_ip().unwrap_or_else(|| "127.0.0.1".into());
+                s.hosted.insert(
+                    instance_id.to_string(),
+                    HostedWorld { address: format!("{ip}:{port}"), world, lan: true, port: Some(port) },
+                );
+                true
+            }
+            LogEvent::Closed => s.hosted.remove(instance_id).is_some(),
+        }
     }
 
     /// Строка от лаунчера (например, вывод установщика Forge) в консоль сборки
@@ -182,7 +230,13 @@ impl GameWatcher {
                 played_secs: started.elapsed().as_secs(),
                 hint,
             };
-            watcher.state.lock().running.remove(&instance_id);
+            {
+                let mut s = watcher.state.lock();
+                s.running.remove(&instance_id);
+                s.hosted.remove(&instance_id);
+                s.worlds.remove(&instance_id);
+            }
+            crate::engine::friends::game_exited(&app);
             log::info!("Игра {instance_id} (pid {pid}) завершилась: {exit_code:?}");
             on_exit(&info);
             let _ = app.emit("game-exit", &info);
@@ -209,6 +263,9 @@ impl GameWatcher {
                             continue;
                         }
                         watcher.push_log(&instance_id, line.clone());
+                        if watcher.observe(&instance_id, &line) {
+                            crate::engine::friends::poke(&app);
+                        }
                         let _ = app.emit(
                             "game-log",
                             GameLogEvent { instance_id: instance_id.clone(), line, stderr },

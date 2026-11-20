@@ -15,7 +15,7 @@ import { IconPlus, IconTrash } from './Icons'
 
 type Target = 'all' | Screen
 
-const TARGETS: Target[] = ['all', 'home', 'instance', 'content', 'skins', 'accounts', 'settings']
+const TARGETS: Target[] = ['all', 'home', 'instance', 'content', 'friends', 'skins', 'accounts', 'settings']
 
 function Slider({
   label,
@@ -170,7 +170,7 @@ export function AppearanceSettings() {
                     {t.video && <span className="bg-tile-badge">видео</span>}
                   </span>
                   <span className="bg-tile-name">{t.name}</span>
-                  {used.length > 0 && <span className="bg-tile-used">{used.length === 6 ? 'везде' : used.join(', ')}</span>}
+                  {used.length > 0 && <span className="bg-tile-used">{used.length === TARGETS.length - 1 ? 'везде' : used.join(', ')}</span>}
                 </button>
                 {t.removable && (
                   <button className="icon-btn danger bg-tile-remove" onClick={() => remove(t.removable!)} aria-label={`Удалить фон ${t.name}`}>

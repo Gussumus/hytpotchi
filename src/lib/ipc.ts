@@ -32,6 +32,7 @@ import type {
 } from './types'
 import { mockCall, mockListen } from './mock'
 import type { CustomBackground } from './appearance'
+import type { FriendInvite, FriendsState, FriendStatus, HytpotchiAuth } from './types'
 
 /** Запущено внутри Tauri (а не в обычном браузере для предпросмотра) */
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -64,6 +65,8 @@ export const events = {
   log: (h: (p: GameLog) => void) => on<GameLog>('game-log', h),
   exit: (h: (p: GameExitWithHint) => void) => on<GameExitWithHint>('game-exit', h),
   pack: (h: (p: PackProgress) => void) => on<PackProgress>('modpack-progress', h),
+  friends: (h: (p: FriendsState) => void) => on<FriendsState>('friends-update', h),
+  friendInvite: (h: (p: FriendInvite) => void) => on<FriendInvite>('friends-invite', h),
 }
 
 /** URL локального файла (скриншоты) через asset-протокол Tauri */
@@ -98,7 +101,14 @@ export const api = {
   // Аккаунты
   msStart: () => call<DeviceCode>('microsoft_auth_start'),
   msPoll: (deviceCode: string) => call<Account | null>('microsoft_auth_poll', { deviceCode }),
-  addOffline: (username: string) => call<Account>('account_add_offline', { username }),
+  hytRegister: (nick: string, password: string, replace?: string) =>
+    call<HytpotchiAuth>('hytpotchi_register', { nick, password, replace: replace ?? null }),
+  hytLogin: (nick: string, password: string, replace?: string) =>
+    call<Account>('hytpotchi_login', { nick, password, replace: replace ?? null }),
+  hytRecover: (nick: string, recovery: string, password: string) =>
+    call<HytpotchiAuth>('hytpotchi_recover', { nick, recovery, password }),
+  hytChangePassword: (accountId: string, old: string, password: string) =>
+    call<void>('hytpotchi_change_password', { accountId, old, password }),
   accountList: () => call<Account[]>('account_list'),
   accountRemove: (accountId: string) => call<void>('account_remove', { accountId }),
   accountSetActive: (accountId: string) => call<void>('account_set_active', { accountId }),
@@ -160,6 +170,22 @@ export const api = {
   skinLibrary: () => call<LibrarySkin[]>('skin_library'),
   skinLibraryAdd: (variant: string) => call<LibrarySkin | null>('skin_library_add', { variant }),
   skinLibraryRemove: (id: string) => call<void>('skin_library_remove', { id }),
+
+  // Друзья
+  friendsState: () => call<FriendsState>('friends_state'),
+  friendsRefresh: () => call<FriendsState>('friends_refresh'),
+  friendsSettings: (p: { enabled?: boolean; status?: FriendStatus; hosting?: boolean }) =>
+    call<FriendsState>('friends_settings', p),
+  friendsRequest: (nick: string) => call<FriendsState>('friends_request', { nick }),
+  /** Туннель в мир друга: адрес для игры (127.0.0.1:порт) */
+  friendsJoin: (id: string) => call<string>('friends_join', { id }),
+  /** Поставить ту же сборку, что у друга (прогресс — событием modpack-progress) */
+  friendsSyncPack: (id: string, memoryMb: number, job: string) => call<Instance>('friends_sync_pack', { id, memoryMb, job }),
+  friendsRespond: (id: string, accept: boolean) => call<FriendsState>('friends_respond', { id, accept }),
+  friendsRemove: (id: string) => call<FriendsState>('friends_remove', { id }),
+  friendsInvite: (p: { to: string; address?: string | null; instanceName?: string; mc?: string; loader?: string | null; note?: string }) =>
+    call<FriendsState>('friends_invite', p),
+  friendsDismiss: (id: string) => call<FriendsState>('friends_dismiss', { id }),
 
   // Внешний вид: свои фоны
   backgroundList: () => call<CustomBackground[]>('background_list'),

@@ -43,6 +43,7 @@ export const SCREEN_LABELS: Record<Screen, string> = {
   home: 'Главная',
   instance: 'Сборка',
   content: 'Каталог',
+  friends: 'Друзья',
   skins: 'Скины',
   accounts: 'Аккаунты',
   settings: 'Настройки',

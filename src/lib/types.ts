@@ -91,7 +91,8 @@ export interface Account {
   id: string
   username: string
   uuid: string
-  kind: 'microsoft' | 'offline'
+  /** offline — старый офлайн-аккаунт: играть им нельзя, только перенести ник в Hytpotchi */
+  kind: 'microsoft' | 'hytpotchi' | 'offline'
   active: boolean
   skinUrl: string | null
   offlineSkin?: string | null
@@ -253,6 +254,8 @@ export interface PackProgress {
   label: string
   done: number
   total: number
+  /** Метка задачи (сборка друга): события чужих и завершённых задач игнорируются */
+  job?: string
 }
 
 export interface FeaturesStatus {
@@ -268,4 +271,104 @@ export interface AppUpdate {
   currentVersion: string
   version: string | null
   notes: string | null
+}
+
+// ---------- Друзья ----------
+
+export type FriendStatus = 'online' | 'busy' | 'invisible'
+
+export interface FriendActivity {
+  instance: string
+  mc: string
+  loader: string | null
+  server?: string | null
+}
+
+/** Мир, открытый для друзей: адрес e4mc или туннель через лаунчер (relay) */
+export interface FriendHost {
+  address?: string | null
+  relay?: boolean
+  world?: string | null
+  mc: string
+  loader: string | null
+  /** Хеш описи сборки хозяина — лаунчер поставит такую же */
+  pack?: string | null
+  /** Сколько модов в сборке */
+  mods?: number | null
+}
+
+export interface Friend {
+  id: string
+  nick: string
+  online: boolean
+  status: FriendStatus | 'offline'
+  activity: FriendActivity | null
+  host: FriendHost | null
+  lastSeen: number | null
+}
+
+export interface FriendPerson {
+  id: string
+  nick: string
+  at: number
+}
+
+export interface FriendInvite {
+  id: string
+  from: string
+  fromNick: string
+  at: number
+  /** Адрес сервера/e4mc; null — мир друга через туннель лаунчера */
+  address: string | null
+  relay: boolean
+  instance: { name: string; mc: string; loader: string | null } | null
+  /** Хеш сборки хозяина на момент приглашения */
+  pack: string | null
+  note: string | null
+}
+
+export interface FriendsSnapshot {
+  me: { id: string; nick: string }
+  friends: Friend[]
+  requests: FriendPerson[]
+  outgoing: FriendPerson[]
+  invites: FriendInvite[]
+}
+
+/** Мой открытый мир */
+export interface LocalHost {
+  instanceId: string
+  instance: string
+  mc: string
+  loader: string | null
+  address: string
+  world: string | null
+  /** Открыт без e4mc — друзья заходят через туннель лаунчера */
+  relay: boolean
+  /** Сколько модов друзья получат вместе со сборкой */
+  mods: number | null
+  /** Моды не с Modrinth — их друзья не получат */
+  missing: string[]
+}
+
+export interface FriendsState {
+  enabled: boolean
+  configured: boolean
+  /** Ник аккаунта Hytpotchi, от которого работают друзья */
+  account: string | null
+  /** Хозяин мира вошёл через Microsoft — друзьям тоже нужна лицензия */
+  hostOnlineMode: boolean
+  status: FriendStatus
+  hosting: boolean
+  snapshot: FriendsSnapshot | null
+  error: string | null
+  hosted: LocalHost[]
+  syncing: boolean
+}
+
+/** Результат регистрации/восстановления аккаунта Hytpotchi */
+export interface HytpotchiAuth {
+  account: Account
+  /** Код восстановления — показывается один раз */
+  recovery: string | null
 }

@@ -32,4 +32,7 @@ jobs:
         run: cargo test --locked
 
       - name: Сервер скинов
-        run: node --experimental-strip-types server/skins/test/worker.test.mjs
+        run: |
+          node --experimental-strip-types server/skins/test/worker.test.mjs
+          node --experimental-strip-types server/skins/test/hub.test.mjs
+          node --experimental-strip-types server/skins/test/tunnel.test.mjs

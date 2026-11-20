@@ -1,4 +1,4 @@
-# Сервер скинов Hytpotchi
+# Сервер Hytpotchi: аккаунты, скины, друзья, туннель
 
 Общий сервер, через который игроки Hytpotchi видят офлайн-скины друг друга.
 Это Cloudflare Worker с хранилищем KV. Бесплатного тарифа хватает на тысячи игроков:
@@ -43,7 +43,30 @@ npm run tauri build
 curl https://hytpotchi-skins.example.workers.dev/
 ```
 
-Ответ: `{"service":"hytpotchi-skins","ok":true}`.
+Ответ: `{"service":"hytpotchi-skins","ok":true,"friends":true,"accounts":true,"tunnel":true}`.
+
+## Аккаунты и друзья
+
+`POST /api/account/*` и `POST /api/friends/*` обслуживает Durable Object `FriendsHub`
+([src/hub.ts](src/hub.ts)). Один экземпляр на весь сервер, хранилище SQLite (бесплатный тариф).
+
+- Аккаунт — ник + пароль. Ник уникален без учёта регистра. Пароль хранится как PBKDF2-SHA256
+  (100 000 итераций, соль), токены сеансов и код восстановления — только как SHA-256.
+  После 5 неверных паролей вход по нику блокируется на 5 минут.
+- Скин для ника (`PUT /api/skins/<ник>`) принимается только с токеном владельца этого ника.
+  При регистрации ника старый скин под ним (от прежних офлайн-игроков) удаляется.
+- Друзья добавляются по нику. `sync` раз в ~45 с: лаунчер сообщает, во что играет и открыт ли
+  мир, а получает друзей, заявки и приглашения. `lastSeen` пишется не чаще раза в 2 минуты.
+- Сборка хозяина: `pack` кладёт опись модов (имя, SHA-1, размер, ссылка на CDN Modrinth, до 1 МБ),
+  `pack/get` отдаёт её только друзьям. Лаунчер гостя качает файлы только с `cdn.modrinth.com`
+  и проверяет SHA-1.
+
+## Туннель
+
+Durable Object `TunnelRelay` ([src/tunnel.ts](src/tunnel.ts)) — по одному на открытый мир.
+Лаунчер хозяина держит WebSocket `control`; гость подключается к `join` с билетом от хаба
+(`/api/friends/join`, только для друзей, билет живёт 5 минут); на каждое соединение игры хозяин
+открывает `data`, и байты Minecraft идут насквозь. Секрет хозяина и билеты хранятся хешами.
 
 ## Тесты
 
@@ -51,4 +74,6 @@ curl https://hytpotchi-skins.example.workers.dev/
 
 ```bash
 node --experimental-strip-types server/skins/test/worker.test.mjs
+node --experimental-strip-types server/skins/test/hub.test.mjs
+node --experimental-strip-types server/skins/test/tunnel.test.mjs
 ```

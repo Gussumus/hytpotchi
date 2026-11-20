@@ -12,7 +12,7 @@ export function PackProgress() {
         <div className="pack-icon">
           <IconPackage size={28} />
         </div>
-        <h2>Устанавливаем модпак</h2>
+        <h2>{pack.label.startsWith('Готовим сборку') || pack.label.includes('друга') ? 'Ставим сборку друга' : 'Устанавливаем модпак'}</h2>
         <p className="muted">{pack.label}</p>
         <div className="bar">
           <div style={{ width: `${pct}%` }} />

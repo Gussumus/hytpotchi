@@ -3,6 +3,7 @@
 use serde::Serialize;
 use tauri::{State, command};
 
+use crate::engine::accounts::hytpotchi;
 use crate::engine::accounts::microsoft::MicrosoftAuth;
 use crate::engine::accounts::session::{
     Account, AccountKind, AccountStore, new_account, offline_uuid, validate_username,
@@ -116,18 +117,110 @@ pub async fn microsoft_refresh_token(
     Ok(())
 }
 
-#[command]
-pub async fn account_add_offline(
-    store: State<'_, AccountStore>,
-    username: String,
-) -> CmdResult<AccountView> {
-    let username = username.trim().to_string();
-    validate_username(&username).map_err(err)?;
-    let account = store
-        .upsert(new_account(&username, &offline_uuid(&username), AccountKind::Offline, None))
-        .map_err(err)?;
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HytpotchiAuthView {
+    pub account: AccountView,
+    /// Код восстановления — показать один раз
+    pub recovery: Option<String>,
+}
+
+/// Сохранить вход Hytpotchi: аккаунт в списке + токен сеанса в хранилище.
+/// `replace` — старый офлайн-аккаунт с тем же ником: забираем его скин и удаляем.
+async fn finish_hytpotchi(
+    store: &AccountStore,
+    vault: &TokenVault,
+    reply: hytpotchi::AuthReply,
+    replace: Option<String>,
+) -> anyhow::Result<HytpotchiAuthView> {
+    let nick = reply.user.nick;
+    let mut account = new_account(&nick, &offline_uuid(&nick), AccountKind::Hytpotchi, None);
+    let old = replace
+        .as_deref()
+        .and_then(|id| store.get(id))
+        .filter(|a| a.kind == AccountKind::Offline);
+    if let Some(old) = &old {
+        account.offline_skin = old.offline_skin.clone();
+        account.offline_variant = old.offline_variant.clone();
+    }
+    let account = store.upsert(account)?;
+    vault.set_secret(&hytpotchi::session_key(&account.id), reply.token).await?;
+    if let Some(old) = old {
+        store.remove(&old.id)?;
+        store.set_active(&account.id)?;
+    }
     let (_, active) = store.list();
-    Ok(view(account, &active))
+    Ok(HytpotchiAuthView { account: view(account, &active), recovery: reply.recovery })
+}
+
+fn check_password(password: &str) -> anyhow::Result<()> {
+    if password.chars().count() < 8 {
+        anyhow::bail!("Пароль — минимум 8 символов");
+    }
+    Ok(())
+}
+
+#[command]
+pub async fn hytpotchi_register(
+    http: State<'_, HttpClient>,
+    store: State<'_, AccountStore>,
+    vault: State<'_, TokenVault>,
+    nick: String,
+    password: String,
+    replace: Option<String>,
+) -> CmdResult<HytpotchiAuthView> {
+    let nick = nick.trim().to_string();
+    validate_username(&nick).map_err(err)?;
+    check_password(&password).map_err(err)?;
+    let reply = hytpotchi::register(&http, &nick, &password).await.map_err(err)?;
+    finish_hytpotchi(&store, &vault, reply, replace).await.map_err(err)
+}
+
+#[command]
+pub async fn hytpotchi_login(
+    http: State<'_, HttpClient>,
+    store: State<'_, AccountStore>,
+    vault: State<'_, TokenVault>,
+    nick: String,
+    password: String,
+    replace: Option<String>,
+) -> CmdResult<AccountView> {
+    let nick = nick.trim().to_string();
+    validate_username(&nick).map_err(err)?;
+    let reply = hytpotchi::login(&http, &nick, &password).await.map_err(err)?;
+    let view = finish_hytpotchi(&store, &vault, reply, replace).await.map_err(err)?;
+    Ok(view.account)
+}
+
+#[command]
+pub async fn hytpotchi_recover(
+    http: State<'_, HttpClient>,
+    store: State<'_, AccountStore>,
+    vault: State<'_, TokenVault>,
+    nick: String,
+    recovery: String,
+    password: String,
+) -> CmdResult<HytpotchiAuthView> {
+    let nick = nick.trim().to_string();
+    validate_username(&nick).map_err(err)?;
+    check_password(&password).map_err(err)?;
+    let reply = hytpotchi::recover(&http, &nick, recovery.trim(), &password).await.map_err(err)?;
+    finish_hytpotchi(&store, &vault, reply, None).await.map_err(err)
+}
+
+#[command]
+pub async fn hytpotchi_change_password(
+    http: State<'_, HttpClient>,
+    store: State<'_, AccountStore>,
+    vault: State<'_, TokenVault>,
+    account_id: String,
+    old: String,
+    password: String,
+) -> CmdResult<()> {
+    check_password(&password).map_err(err)?;
+    let account = store.get(&account_id).ok_or("Аккаунт не найден")?;
+    let token = hytpotchi::token(&vault, &account).await.map_err(err)?;
+    hytpotchi::change_password(&http, &token, &old, &password).await.map_err(err)
 }
 
 #[command]
@@ -138,10 +231,18 @@ pub async fn account_list(store: State<'_, AccountStore>) -> CmdResult<Vec<Accou
 
 #[command]
 pub async fn account_remove(
+    http: State<'_, HttpClient>,
     store: State<'_, AccountStore>,
     vault: State<'_, TokenVault>,
     account_id: String,
 ) -> CmdResult<()> {
+    // Аккаунт Hytpotchi: выходим на сервере и забываем токен
+    if let Some(account) = store.get(&account_id).filter(|a| a.kind == AccountKind::Hytpotchi) {
+        if let Ok(token) = hytpotchi::token(&vault, &account).await {
+            hytpotchi::logout(&http, &token).await;
+        }
+        vault.remove_secret(&hytpotchi::session_key(&account_id)).await.map_err(err)?;
+    }
     vault
         .remove_account(&AccountId(account_id.clone()))
         .await

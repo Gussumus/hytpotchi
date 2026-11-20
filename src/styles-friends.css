@@ -1,0 +1,471 @@
+/* ============ Друзья ============ */
+
+.nav-badge,
+.nav-online {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.nav-badge {
+  background: var(--danger);
+  color: #fff;
+  animation: pop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+.nav-online {
+  background: rgba(var(--mint-rgb), 0.16);
+  color: var(--mint);
+}
+
+.friends-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .friends-layout {
+    grid-template-columns: 1fr;
+  }
+  .friends-side {
+    order: -1;
+  }
+}
+
+.friends-main,
+.friends-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.friends-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.friends-section h3 {
+  margin: 4px 0 2px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.friends-section h3 .count {
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* ---------- Строка друга ---------- */
+@keyframes friend-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+.friend-row,
+.invite-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: calc(14px * var(--round));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: friend-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.friend-row:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.friend-row:not(.online):not(.request) {
+  opacity: 0.72;
+}
+.friend-row.hosting {
+  border-color: color-mix(in srgb, var(--mint) 45%, transparent);
+  background: linear-gradient(90deg, rgba(var(--mint-rgb), 0.09), var(--surface) 60%);
+}
+.friend-row.muted-row {
+  opacity: 0.8;
+}
+.friend-text,
+.invite-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.friend-text strong,
+.invite-text strong {
+  font-size: 14px;
+}
+.friend-text span,
+.invite-text span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.friend-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.friend-remove {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.friend-row:hover .friend-remove,
+.friend-remove:focus-visible {
+  opacity: 1;
+}
+
+.friend-avatar {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: calc(12px * var(--round));
+  font-weight: 750;
+  font-size: 17px;
+  color: #fff;
+  background: linear-gradient(145deg, var(--c), color-mix(in srgb, var(--c), #000 35%));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.friend-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #12151b;
+  background: var(--faint);
+}
+.friend-dot.inline {
+  position: static;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: none;
+  margin-right: 6px;
+}
+.friend-dot.online {
+  background: var(--mint);
+}
+.friend-dot.busy {
+  background: var(--danger);
+}
+.friend-dot.invisible {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--muted);
+}
+
+/* ---------- Приглашения ---------- */
+@keyframes invite-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--mint-rgb), 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(var(--mint-rgb), 0.18);
+  }
+}
+.invite-card {
+  border-color: color-mix(in srgb, var(--mint) 55%, transparent);
+  background: linear-gradient(90deg, rgba(var(--mint-rgb), 0.14), var(--surface));
+  animation:
+    friend-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards,
+    invite-glow 2.4s ease-in-out infinite;
+}
+
+/* ---------- Боковая колонка ---------- */
+.friends-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: calc(16px * var(--round));
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.friends-card.me {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(var(--mint-rgb), 0.16), transparent 60%),
+    var(--surface);
+}
+.my-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.my-code strong {
+  font-family: var(--mono);
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  color: var(--mint);
+}
+.status-picker {
+  width: 100%;
+}
+.status-picker button {
+  flex: 1;
+  padding: 0 6px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  justify-content: center;
+  display: inline-flex;
+  align-items: center;
+}
+
+.add-friend {
+  display: flex;
+  gap: 8px;
+}
+.add-friend input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+.add-friend input:focus {
+  outline: none;
+  border-color: var(--mint);
+}
+.add-friend .btn {
+  width: 44px;
+  padding: 0;
+}
+
+.host-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.host-head svg {
+  color: var(--mint);
+}
+@keyframes live {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--mint-rgb), 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(var(--mint-rgb), 0);
+  }
+}
+.host-live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(var(--mint-rgb), 0.1);
+  border: 1px solid rgba(var(--mint-rgb), 0.35);
+}
+.host-live > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.host-live code {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--mint);
+  animation: live 1.6s ease-out infinite;
+}
+.host-live.lan {
+  background: rgba(255, 181, 71, 0.1);
+  border-color: rgba(255, 181, 71, 0.35);
+}
+.host-live.lan .live-dot {
+  background: var(--warn);
+  animation: none;
+}
+.host-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.host-steps b {
+  color: var(--text);
+}
+.setting-row.compact {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  gap: 12px;
+}
+.setting-row.compact h3 {
+  font-size: 14px;
+}
+.friends-off {
+  align-self: flex-start;
+  color: var(--faint);
+}
+
+.friend-skeleton {
+  height: 62px;
+  border-radius: 14px;
+}
+
+@keyframes spin-icon {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin-icon 0.9s linear infinite;
+}
+
+/* ============ Аккаунты и вход ============ */
+
+.login-tabs {
+  display: flex;
+  margin-bottom: 16px;
+}
+.login-tabs button,
+.wide-seg button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.wide-seg {
+  display: flex;
+  width: 100%;
+}
+.hyt-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.hyt-login .field {
+  margin-bottom: 0;
+  gap: 6px;
+}
+.hyt-login .field input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font-size: 14px;
+}
+.hyt-login .field input:focus {
+  outline: none;
+  border-color: var(--mint);
+  box-shadow: 0 0 0 3px rgba(var(--mint-rgb), 0.15);
+}
+.hyt-login .btn.wide {
+  gap: 8px;
+}
+.hyt-login h3 {
+  margin: 0;
+}
+.login-logo.ok {
+  align-self: center;
+  color: var(--mint);
+}
+.user-code.recovery span {
+  font-size: 20px;
+  letter-spacing: 0.06em;
+}
+.login-links {
+  display: flex;
+  justify-content: center;
+}
+.login-links .link {
+  margin: 0;
+  font-size: 13px;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.check-row input {
+  accent-color: var(--mint);
+  width: 16px;
+  height: 16px;
+}
+
+.account-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: calc(14px * var(--round));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: border-color 0.15s;
+}
+.account-card.on {
+  border-color: rgba(var(--mint-rgb), 0.35);
+}
+.account-card.offline {
+  border-style: dashed;
+  border-color: rgba(255, 181, 71, 0.4);
+}
+.account-card .account-row {
+  background: none;
+  border: none;
+}
+.account-card .account-row .btn.sm {
+  flex: none;
+}
+.password-form {
+  padding: 0 14px 14px 72px;
+  display: flex;
+  gap: 8px;
+  animation: rise-in 0.2s ease;
+}
+.password-form input {
+  flex: 1;
+  min-width: 0;
+}
+.panel-icon.hyt {
+  background: rgba(var(--mint-rgb), 0.14);
+}
+.info-box strong svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
