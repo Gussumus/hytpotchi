@@ -55,7 +55,7 @@ impl HttpClient {
     /// Перенаправляет только официальные адреса Modrinth через Worker.
     /// Если переменная сборки не задана, используется прямое подключение.
     pub fn route_url(&self, raw: &str) -> String {
-        let Some(base) = option_env!("HYTPOTCHI_MODRINTH_PROXY") else {
+        let Some(base) = option_env!("HYTPOTCHI_MODRINTH_PROXY").filter(|value| !value.trim().is_empty()) else {
             return raw.to_string();
         };
         let Ok(url) = url::Url::parse(raw) else {
