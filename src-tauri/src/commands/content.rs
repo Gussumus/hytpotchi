@@ -518,7 +518,7 @@ async fn identify_unknown(http: &HttpClient, instance_id: &str, index: &mut ModI
     let hashes: Vec<&str> = files.iter().map(|f| f.0.as_str()).collect();
     let found: HashMap<String, MrVersion> = http
         .client
-        .post(format!("{API}/version_files"))
+        .post(http.route_url(&format!("{API}/version_files")))
         .json(&serde_json::json!({ "hashes": hashes, "algorithm": "sha1" }))
         .send()
         .await?

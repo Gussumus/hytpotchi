@@ -52,6 +52,40 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
+    /// Перенаправляет только официальные адреса Modrinth через Worker.
+    /// Если переменная сборки не задана, используется прямое подключение.
+    pub fn route_url(&self, raw: &str) -> String {
+        let Some(base) = option_env!("HYTPOTCHI_MODRINTH_PROXY").filter(|value| !value.trim().is_empty()) else {
+            return raw.to_string();
+        };
+        let Ok(url) = url::Url::parse(raw) else {
+            return raw.to_string();
+        };
+        let Some(host) = url.host_str() else {
+            return raw.to_string();
+        };
+        let host = host.to_ascii_lowercase();
+        let is_api = host == "api.modrinth.com";
+        let is_file = host == "modrinth.com"
+            || host == "modrinth.net"
+            || host.ends_with(".modrinth.com")
+            || host.ends_with(".modrinth.net");
+        if !is_api && !is_file {
+            return raw.to_string();
+        }
+        let base = base.trim_end_matches('/');
+        if is_api {
+            format!(
+                "{base}{}{}",
+                url.path(),
+                url.query().map(|q| format!("?{q}")).unwrap_or_default()
+            )
+        } else {
+            let encoded: String = url::form_urlencoded::byte_serialize(raw.as_bytes()).collect();
+            format!("{base}/download?url={encoded}")
+        }
+    }
+
     pub fn new() -> Result<Self> {
         let client = ClientBuilder::new()
             .connect_timeout(Duration::from_secs(15))
@@ -71,7 +105,7 @@ impl HttpClient {
     pub async fn get(&self, url: &str) -> Result<Response> {
         let response = self
             .client
-            .get(url)
+            .get(self.route_url(url))
             .send()
             .await
             .with_context(|| format!("Нет ответа от {}", host_of(url)))?;
@@ -79,7 +113,7 @@ impl HttpClient {
     }
 
     pub async fn get_with_headers(&self, url: &str, headers: &[(&str, &str)]) -> Result<Response> {
-        let mut request = self.client.get(url);
+        let mut request = self.client.get(self.route_url(url));
         for (k, v) in headers {
             request = request.header(*k, *v);
         }
