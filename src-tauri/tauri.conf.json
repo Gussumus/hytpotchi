@@ -50,15 +50,11 @@
         "type": "downloadBootstrapper"
       },
       "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
         "languages": ["Russian", "English"],
         "displayLanguageSelector": false
       }
-    }
-  },
-  "plugins": {
-    "updater": {
-      "endpoints": ["https://releases.hytpotchi.dev/{{target}}/{{current_version}}"],
-      "pubkey": ""
     }
   }
 }

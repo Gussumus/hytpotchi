@@ -57,7 +57,6 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().level(log::LevelFilter::Info).build())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_process::init())
@@ -169,10 +168,6 @@ pub fn run() {
             commands::telemetry::telemetry_set_enabled,
             commands::telemetry::telemetry_track,
             commands::telemetry::telemetry_flush,
-            // Обновления
-            commands::update::check_update,
-            commands::update::install_update,
-            commands::update::restart_app,
         ])
         .setup(|app| {
             let root = engine::core::paths::app_dir()?;
