@@ -17,6 +17,7 @@ jobs:
       # Публичные значения — в Settings → Secrets and variables → Actions → Variables
       HYTPOTCHI_MS_CLIENT_ID: ${{ vars.HYTPOTCHI_MS_CLIENT_ID }}
       HYTPOTCHI_SKIN_SERVER: ${{ vars.HYTPOTCHI_SKIN_SERVER }}
+      HYTPOTCHI_MODRINTH_PROXY: ${{ vars.HYTPOTCHI_MODRINTH_PROXY }}
       HYTPOTCHI_DISCORD_ID: ${{ vars.HYTPOTCHI_DISCORD_ID }}
       # Автообновление включается только в этих сборках
       HYTPOTCHI_UPDATER: '1'
