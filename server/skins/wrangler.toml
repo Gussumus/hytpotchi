@@ -6,4 +6,4 @@ compatibility_date = "2025-01-01"
 # и вставить выданный id сюда
 [[kv_namespaces]]
 binding = "SKINS"
-id = "ВСТАВЬТЕ_ID_ИЗ_KV_NAMESPACE_CREATE"
+id = "6c8b559bedd140e797da62329c134440"

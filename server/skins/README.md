@@ -14,7 +14,7 @@
 
 ## Развёртывание (один раз)
 
-Нужен бесплатный аккаунт Cloudflare.
+Нужен бесплатный аккаунт Cloudflare. Подробная инструкция для новичков — [docs/02-skins-server.md](../../docs/02-skins-server.md).
 
 ```bash
 cd server/skins
