@@ -75,7 +75,11 @@ impl HttpClient {
         }
         let base = base.trim_end_matches('/');
         if is_api {
-            format!("{base}{}", url.path_and_query())
+            format!(
+                "{base}{}{}",
+                url.path(),
+                url.query().map(|q| format!("?{q}")).unwrap_or_default()
+            )
         } else {
             let encoded: String = url::form_urlencoded::byte_serialize(raw.as_bytes()).collect();
             format!("{base}/download?url={encoded}")
