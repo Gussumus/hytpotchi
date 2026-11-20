@@ -55,12 +55,26 @@ export function LoginModal() {
     }
   }, [refresh, setModal, toast])
 
-  async function copyAndOpen() {
-    if (!code) return
+  
+
+async function copyAndOpen() {
+  if (!code) return
+
+  try {
     await copyText(code.userCode)
     setCopied(true)
-    await openExternal(code.verificationUri)
+  } catch (e) {
+    console.error('Ошибка копирования:', e)
   }
+
+  try {
+    await openExternal(code.verificationUri)
+  } catch (e) {
+    console.error('Ошибка открытия браузера:', e)
+    setError(`Не удалось открыть страницу Microsoft: ${String(e)}`)
+  }
+}
+
 
   return (
     <Modal title="Вход через Microsoft" onClose={() => setModal(null)} width={480}>
