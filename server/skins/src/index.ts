@@ -10,6 +10,8 @@
  *
  * Аккаунты и друзья — Durable Object FriendsHub (см. hub.ts):
  *   POST /api/account/*, POST /api/friends/*
+ * Плащ (тот же владелец ника): PUT/DELETE /api/capes/{ник}   (PNG 64×32, 128×64, 256×128 или 512×256)
+ * Скины и плащи на ванилле без модов — API Yggdrasil для authlib-injector: /yggdrasil/* (см. yggdrasil.ts)
  * Туннель «играть вместе без модов» — Durable Object TunnelRelay на каждый мир (см. tunnel.ts):
  *   GET  /api/tunnel/{hostId}/control|data|join   (WebSocket)
  *
@@ -20,6 +22,7 @@
 
 export { FriendsHub } from './hub.ts'
 export { TunnelRelay } from './tunnel.ts'
+import { handleYggdrasil, rememberUuid, type YggHub } from './yggdrasil.ts'
 
 interface DONamespace {
   idFromName(name: string): unknown
@@ -32,6 +35,8 @@ export interface Env {
   FRIENDS?: DONamespace
   /** Туннели для совместной игры */
   TUNNEL?: DONamespace
+  /** Ключ подписи текстур для authlib-injector (wrangler secret put YGG_PRIVATE_KEY) */
+  YGG_PRIVATE_KEY?: string
 }
 
 interface Profile {
@@ -44,6 +49,7 @@ interface Profile {
 const NAME_RE = /^[A-Za-z0-9_]{3,16}$/
 const HASH_RE = /^[0-9a-f]{64}$/
 const MAX_PNG = 64 * 1024
+const MAX_CAPE = 256 * 1024
 
 async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', data)
@@ -71,7 +77,45 @@ function validPng(bytes: Uint8Array): boolean {
   return w === 64 && (h === 64 || h === 32)
 }
 
+/** Плащ: ширина вдвое больше высоты, 64…512 */
+function validCape(bytes: Uint8Array): boolean {
+  const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+  if (bytes.length < 24 || bytes.length > MAX_CAPE || !sig.every((b, i) => bytes[i] === b)) return false
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const w = view.getUint32(16)
+  const h = view.getUint32(20)
+  return [64, 128, 256, 512].includes(w) && h * 2 === w
+}
+
 const hubOf = (env: Env) => env.FRIENDS!.get(env.FRIENDS!.idFromName('hub'))
+
+/** Хаб для API Yggdrasil */
+function yggHub(env: Env): YggHub {
+  const call = async (path: string, body: unknown, token?: string) =>
+    hubOf(env).fetch(
+      new Request(`https://hub${path}`, {
+        method: 'POST',
+        body: JSON.stringify(body ?? {}),
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      }),
+    )
+  return {
+    async whoami(token) {
+      const r = await call('/internal/whoami', {}, token)
+      if (!r.ok) return null
+      return ((await r.json()) as { user: { nick: string } }).user
+    },
+    async registered(nick) {
+      return ((await (await call('/internal/nick', { nick })).json()) as { registered: boolean }).registered
+    },
+    async joined(serverId, nick) {
+      await call('/internal/ygg/join', { serverId, nick })
+    },
+    async hasJoined(serverId, nick) {
+      return ((await (await call('/internal/ygg/hasjoined', { serverId, nick })).json()) as { ok: boolean }).ok
+    },
+  }
+}
 
 /** Кто может менять скин ника: владелец аккаунта, никто (ник занят) или старый ключ (ник свободен) */
 async function nickAccess(request: Request, env: Env, nick: string): Promise<'owner' | 'taken' | 'free'> {
@@ -144,6 +188,11 @@ export default {
       return res
     }
 
+    if (path === '/yggdrasil' || path.startsWith('/yggdrasil/')) {
+      if (!env.FRIENDS) return error('Аккаунты на этом сервере не включены', 501)
+      return handleYggdrasil(request, env, yggHub(env))
+    }
+
     const tunnel = /^\/api\/tunnel\/([0-9a-f]{24})\/(control|data|join)$/.exec(path)
     if (tunnel) {
       if (!env.TUNNEL) return error('Туннель на этом сервере не включён — обновите его (wrangler deploy)', 501)
@@ -158,7 +207,8 @@ export default {
       const raw = await env.SKINS.get(`profile:${name.toLowerCase()}`)
       if (!raw) return error('not found', 404)
       const p = JSON.parse(raw) as Profile
-      return json({ username: p.username, skins: { [p.model]: p.hash } }, 200, 'public, max-age=60')
+      const cape = await env.SKINS.get(`cape:${name.toLowerCase()}`)
+      return json({ username: p.username, skins: { [p.model]: p.hash }, ...(cape ? { cape } : {}) }, 200, 'public, max-age=60')
     }
 
     // Текстура
@@ -190,12 +240,37 @@ export default {
         await env.SKINS.put(`tex:${hash}`, bytes)
         const profile: Profile = { username: name, model, hash, updated: new Date().toISOString() }
         await env.SKINS.put(`profile:${key}`, JSON.stringify(profile))
+        await rememberUuid(env, name)
         return json({ ok: true, hash })
       }
 
       if (request.method === 'DELETE') {
         if (!(await mayEditSkin(request, env, name))) return error('Этот ник принадлежит другому игроку', 403)
         await env.SKINS.delete(`profile:${key}`)
+        return json({ ok: true })
+      }
+    }
+
+    // Плащ — только владелец аккаунта с этим ником
+    const capeMatch = /^\/api\/capes\/([^/]+)$/.exec(path)
+    if (capeMatch) {
+      const name = capeMatch[1]
+      if (!NAME_RE.test(name)) return error('Ник: 3–16 символов, латиница, цифры и _', 400)
+      if ((await nickAccess(request, env, name)) !== 'owner') {
+        return error('Плащ может поставить только владелец ника — войдите в аккаунт Hytpotchi', 403)
+      }
+      const key = name.toLowerCase()
+      if (request.method === 'PUT') {
+        const bytes = new Uint8Array(await request.arrayBuffer())
+        if (!validCape(bytes)) return error('Нужен PNG плаща: 64×32, 128×64, 256×128 или 512×256, до 256 КБ', 400)
+        const hash = await sha256Hex(bytes)
+        await env.SKINS.put(`tex:${hash}`, bytes)
+        await env.SKINS.put(`cape:${key}`, hash)
+        await rememberUuid(env, name)
+        return json({ ok: true, hash })
+      }
+      if (request.method === 'DELETE') {
+        await env.SKINS.delete(`cape:${key}`)
         return json({ ok: true })
       }
     }

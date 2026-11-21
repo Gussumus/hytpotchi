@@ -181,10 +181,11 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
     emit("account", 0, 1);
     let accounts = app.state::<AccountStore>();
     let account = require(accounts.active())?;
-    let session = game_session(&http, &vault, &accounts, &account).await?;
+    let mut session = game_session(&http, &vault, &accounts, &account).await?;
 
-    // Скины через CustomSkinLoader (только в сборках с загрузчиком):
-    // свой офлайн-скин + скины других игроков Hytpotchi с общего сервера
+    // Скины и плащи аккаунтов Hytpotchi: authlib-injector (на любой версии, и на ванилле),
+    // а если он недоступен — CustomSkinLoader (только в сборках с загрузчиком)
+    let mut auth_jvm: Vec<String> = Vec::new();
     {
         let game_dir = instance_game_dir(instance_id)?;
         let settings = crate::engine::core::settings::load();
@@ -192,6 +193,28 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
             .shared_skins
             .then(crate::engine::core::settings::skin_server)
             .flatten();
+        if let (AccountKind::Hytpotchi, Some(server)) = (account.kind, server.as_deref()) {
+            let api = crate::engine::skins::authlib::api_root(server);
+            let ready = async {
+                let jar = crate::engine::skins::authlib::ensure_jar(&http).await?;
+                let token = crate::engine::accounts::hytpotchi::token(&vault, &account).await?;
+                let prefetched = crate::engine::skins::authlib::prefetch(&http, &api)
+                    .await
+                    .context("сервер Hytpotchi не ответил")?;
+                anyhow::Ok((jar, token, prefetched))
+            }
+            .await;
+            match ready {
+                Ok((jar, token, prefetched)) => {
+                    auth_jvm = crate::engine::skins::authlib::jvm_args(&jar, &api, Some(&prefetched));
+                    session.access_token = token;
+                    session.user_type = "mojang".into();
+                    console("Скины и плащи игроков Hytpotchi — через authlib-injector (работает и без модов)".into());
+                }
+                Err(e) => console(format!("authlib-injector не подключён ({e:#}) — скины через CustomSkinLoader")),
+            }
+        }
+        let authlib = !auth_jvm.is_empty();
         let own_skin = if account.kind == AccountKind::Hytpotchi {
             account
                 .offline_skin
@@ -205,6 +228,7 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
         }
 
         match &instance.loader {
+            _ if authlib => {}
             Some(_) if own_skin.is_some() || server.is_some() => {
                 let result = async {
                     if crate::commands::content::ensure_project(&http, &instance, offline_skin::CSL_PROJECT).await? {
@@ -244,7 +268,8 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
     // 7. План и запуск
     emit("starting", 0, 1);
     let game_dir = instance_game_dir(instance_id)?;
-    let extra_jvm: Vec<String> = instance.jvm_args.split_whitespace().map(String::from).collect();
+    let mut extra_jvm = auth_jvm;
+    extra_jvm.extend(instance.jvm_args.split_whitespace().map(String::from));
     let plan = plan_launch(LaunchContext {
         manifest: &manifest,
         java: &java,

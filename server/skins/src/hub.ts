@@ -123,6 +123,8 @@ const ONLINE_MS = 150_000
 const PERSIST_MS = 120_000
 const INVITE_TTL = 15 * 60_000
 const TICKET_TTL = 5 * 60_000
+/** Сколько мир ждёт проверки вошедшего игрока (join → hasJoined) */
+const JOIN_TTL = 30_000
 /** Сколько ждать хозяина при пробитии NAT */
 const PUNCH_TTL = 30_000
 const MAX_PUNCHES = 200
@@ -261,6 +263,8 @@ function cleanHost(raw: unknown): Host | null {
 export class Hub {
   /** Свежие статусы в памяти (между записями в хранилище) */
   private presence = new Map<string, Presence>()
+  /** Входы в миры через authlib-injector (serverId → ник): живут секунды, только в памяти */
+  private joins = new Map<string, { nick: string; at: number }>()
   /** Пробитие NAT: заявки гостей живут секунды, поэтому только в памяти */
   private punches = new Map<string, Punch>()
   private storage: StorageLike
@@ -665,6 +669,11 @@ export class Hub {
 
   // ---------- Прямое соединение (пробитие NAT) ----------
 
+  private dropOldJoins() {
+    const now = this.now()
+    for (const [id, j] of this.joins) if (now - j.at > JOIN_TTL) this.joins.delete(id)
+  }
+
   private dropOldPunches() {
     const now = this.now()
     for (const [nonce, p] of this.punches) if (now - p.at > PUNCH_TTL * 2) this.punches.delete(nonce)
@@ -778,6 +787,18 @@ export class Hub {
         case '/internal/nick':
           // Для воркера: зарегистрирован ли ник (старые лаунчеры могут публиковать скин только под свободным)
           return json({ registered: !!(await this.storage.get(`nick:${cleanNick(body.nick).toLowerCase()}`)) })
+        case '/internal/ygg/join': {
+          // authlib-injector: игрок входит в мир (токен уже проверен воркером)
+          const serverId = String(body.serverId ?? '').slice(0, 64)
+          this.dropOldJoins()
+          if (serverId && this.joins.size < 10_000) this.joins.set(serverId, { nick: String(body.nick ?? ''), at: this.now() })
+          return json({ ok: true })
+        }
+        case '/internal/ygg/hasjoined': {
+          this.dropOldJoins()
+          const j = this.joins.get(String(body.serverId ?? ''))
+          return json({ ok: !!j && j.nick.toLowerCase() === String(body.nick ?? '').toLowerCase() })
+        }
       }
 
       const { user: me, tokenHash } = await this.auth(token)

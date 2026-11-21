@@ -67,7 +67,7 @@ export function Skins() {
       <div className="page-head">
         <div>
           <h1>Скины</h1>
-          <p className="muted">Библиотека скинов, офлайн-скины и плащи Microsoft</p>
+          <p className="muted">Библиотека скинов, свои плащи и плащи Microsoft</p>
         </div>
         <button
           className="btn primary"
@@ -126,10 +126,10 @@ export function Skins() {
                 </div>
                 {isOffline && (
                   <div className="info-box left">
-                    <strong>Офлайн-скин для всех игроков Hytpotchi</strong>
+                    <strong>Скин и плащ для всех игроков Hytpotchi</strong>
                     <span>
-                      «Надеть» публикует скин на общий сервер скинов, и его видят все, кто играет через Hytpotchi. Работает
-                      в сборках с Fabric, Forge, NeoForge или Quilt: нужный мод лаунчер ставит сам.
+                      «Надеть» публикует скин на сервер Hytpotchi, и его видят все, кто играет через Hytpotchi — на любой
+                      версии, в том числе на чистой ванилле без модов.
                     </span>
                     {shared && <span className={`shared-status ${shared.state}`}>{shared.message}</span>}
                     {profile.skin && (
@@ -168,7 +168,39 @@ export function Skins() {
                     Сбросить
                   </button>
                 </div>
-                {profile.capes.length > 0 && (
+                {isOffline && (
+                  <div className="capes">
+                    <span className="muted small">Свой плащ — PNG 64×32 (или 128×64, 256×128, 512×256)</span>
+                    <div className="row">
+                      <button
+                        className="btn ghost sm"
+                        disabled={busy !== null}
+                        onClick={async () => {
+                          const p = await run('cape', () => api.hytpotchiCapeUpload(account!.id))
+                          if (p) {
+                            setProfile(p)
+                            toast('success', 'Плащ надет — его видят все игроки Hytpotchi')
+                          }
+                        }}
+                      >
+                        <IconUpload size={14} /> {activeCape ? 'Сменить плащ' : 'Загрузить плащ'}
+                      </button>
+                      {activeCape && (
+                        <button
+                          className="btn ghost sm"
+                          disabled={busy !== null}
+                          onClick={async () => {
+                            const p = await run('cape', () => api.hytpotchiCapeRemove(account!.id), 'Плащ снят')
+                            if (p) setProfile(p)
+                          }}
+                        >
+                          Снять плащ
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {!isOffline && profile.capes.length > 0 && (
                   <div className="capes">
                     <span className="muted small">Плащи</span>
                     <div className="cape-list">

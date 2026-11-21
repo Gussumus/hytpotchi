@@ -155,7 +155,33 @@ pub fn library_skin_bytes(skin_id: &str) -> Result<Vec<u8>> {
     Ok(std::fs::read(library_dir()?.join(format!("{skin_id}.png")))?)
 }
 
-/// Профиль офлайн-аккаунта: скин из библиотеки, плащей нет
+/// Свой плащ аккаунта Hytpotchi (копия того, что загружен на сервер)
+fn cape_path(account_id: &str) -> Result<PathBuf> {
+    if account_id.is_empty() || !account_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        bail!("Неверный аккаунт");
+    }
+    let dir = app_dir()?.join("capes");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir.join(format!("{account_id}.png")))
+}
+
+/// PNG плаща: ширина вдвое больше высоты, 64…512 (как принимает сервер)
+fn validate_cape(bytes: &[u8]) -> Result<()> {
+    if bytes.len() < 24 || &bytes[..8] != b"\x89PNG\r\n\x1a\n" {
+        bail!("Это не PNG-файл");
+    }
+    let w = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+    let h = u32::from_be_bytes(bytes[20..24].try_into().unwrap());
+    if ![64, 128, 256, 512].contains(&w) || h * 2 != w {
+        bail!("Плащ должен быть 64×32, 128×64, 256×128 или 512×256 пикселей (сейчас {w}×{h})");
+    }
+    if bytes.len() > 256 * 1024 {
+        bail!("Файл плаща слишком большой (до 256 КБ)");
+    }
+    Ok(())
+}
+
+/// Профиль аккаунта Hytpotchi: скин из библиотеки и свой плащ
 fn offline_profile(account: &crate::engine::accounts::session::Account) -> SkinProfile {
     let skin = account
         .offline_skin
@@ -171,9 +197,57 @@ fn offline_profile(account: &crate::engine::accounts::session::Account) -> SkinP
             "classic".into()
         },
         skin,
-        capes: vec![],
+        capes: cape_path(&account.id)
+            .ok()
+            .and_then(|p| std::fs::read(p).ok())
+            .map(|png| CapeView { id: "hytpotchi".into(), name: "Свой плащ".into(), active: true, image: Some(data_url(&png)) })
+            .into_iter()
+            .collect(),
         shared: None,
     }
+}
+
+/// Загрузить свой плащ аккаунта Hytpotchi (виден всем игрокам Hytpotchi, и на ванилле)
+#[command]
+pub async fn hytpotchi_cape_upload(
+    app: AppHandle,
+    http: State<'_, HttpClient>,
+    vault: State<'_, TokenVault>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+) -> CmdResult<Option<SkinProfile>> {
+    let account = offline_account(&store, &account_id).ok_or("Свой плащ — только для аккаунтов Hytpotchi")?;
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("Плащ Minecraft (PNG 64×32)")
+        .add_filter("PNG", &["png"])
+        .blocking_pick_file();
+    let Some(picked) = picked else { return Ok(None) };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    validate_cape(&bytes).map_err(err)?;
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    shared::put_cape(&http, &vault, &server, &account, bytes.clone()).await.map_err(err)?;
+    std::fs::write(cape_path(&account.id).map_err(err)?, &bytes).map_err(|e| e.to_string())?;
+    Ok(Some(offline_profile(&account)))
+}
+
+/// Снять свой плащ
+#[command]
+pub async fn hytpotchi_cape_remove(
+    http: State<'_, HttpClient>,
+    vault: State<'_, TokenVault>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+) -> CmdResult<SkinProfile> {
+    let account = offline_account(&store, &account_id).ok_or("Свой плащ — только для аккаунтов Hytpotchi")?;
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    shared::delete_cape(&http, &vault, &server, &account).await.map_err(err)?;
+    if let Ok(p) = cape_path(&account.id) {
+        let _ = std::fs::remove_file(p);
+    }
+    Ok(offline_profile(&account))
 }
 
 fn offline_account(store: &AccountStore, account_id: &str) -> Option<crate::engine::accounts::session::Account> {

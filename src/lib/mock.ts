@@ -415,6 +415,8 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
     case 'instance_set_cover':
     case 'instance_clear_cover':
       return r(instances.find((i) => i.id === args.id) ?? null)
+    case 'hytpotchi_cape_upload':
+    case 'hytpotchi_cape_remove':
     case 'skin_profile':
     case 'skin_reset': {
       const acc = accounts.find((a) => a.id === args.accountId)

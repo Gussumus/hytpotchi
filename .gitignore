@@ -28,3 +28,4 @@ dist-ssr
 !*.key.pub
 src-tauri/tauri.release.json
 server/skins/.wrangler
+server/skins/.dev.vars

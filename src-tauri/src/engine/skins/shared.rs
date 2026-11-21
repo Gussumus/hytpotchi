@@ -26,7 +26,7 @@ pub async fn publish(
         if slim { "slim" } else { "default" }
     );
     let resp = http
-        .client
+        .oneshot
         .put(url)
         .bearer_auth(token)
         .header("content-type", "image/png")
@@ -47,11 +47,45 @@ pub async fn unpublish(http: &HttpClient, vault: &SecretsVault, server: &str, ac
     };
     let username = account.username.as_str();
     let resp = http
-        .client
+        .oneshot
         .delete(format!("{server}/api/skins/{}", urlencoding::encode(username)))
         .bearer_auth(token)
         .send()
         .await?;
+    if !resp.status().is_success() {
+        return Err(hytpotchi::server_error(resp).await);
+    }
+    Ok(())
+}
+
+/// Загрузить свой плащ (только владелец аккаунта)
+pub async fn put_cape(http: &HttpClient, vault: &SecretsVault, server: &str, account: &Account, png: Vec<u8>) -> Result<()> {
+    let token = hytpotchi::token(vault, account).await?;
+    let resp = http
+        .oneshot
+        .put(format!("{server}/api/capes/{}", urlencoding::encode(&account.username)))
+        .bearer_auth(token)
+        .header("content-type", "image/png")
+        .body(png)
+        .send()
+        .await
+        .map_err(|_| anyhow::anyhow!("Сервер Hytpotchi недоступен"))?;
+    if !resp.status().is_success() {
+        return Err(hytpotchi::server_error(resp).await);
+    }
+    Ok(())
+}
+
+/// Снять свой плащ
+pub async fn delete_cape(http: &HttpClient, vault: &SecretsVault, server: &str, account: &Account) -> Result<()> {
+    let token = hytpotchi::token(vault, account).await?;
+    let resp = http
+        .oneshot
+        .delete(format!("{server}/api/capes/{}", urlencoding::encode(&account.username)))
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|_| anyhow::anyhow!("Сервер Hytpotchi недоступен"))?;
     if !resp.status().is_success() {
         return Err(hytpotchi::server_error(resp).await);
     }
