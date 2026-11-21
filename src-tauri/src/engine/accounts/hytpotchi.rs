@@ -58,28 +58,64 @@ pub async fn server_error(resp: reqwest::Response) -> anyhow::Error {
 pub async fn post(http: &HttpClient, path: &str, token: Option<&str>, body: Value) -> Result<Value> {
     let server = server()?;
     let build = || {
-        let req = http.client.post(format!("{server}{path}")).json(&body).timeout(Duration::from_secs(20));
+        let req = http.oneshot.post(format!("{server}{path}")).json(&body).timeout(Duration::from_secs(20));
         match token {
             Some(t) => req.bearer_auth(t),
             None => req,
         }
     };
-    // Один повтор: соединение могло оборваться разово (переподключение VPN, смена сети)
-    let resp = match build().send().await {
-        Ok(r) => r,
-        Err(first) => {
-            log::warn!("Сервер Hytpotchi: {first:#} — повторяю");
-            tokio::time::sleep(Duration::from_millis(600)).await;
-            build().send().await.map_err(|e| {
-                log::warn!("Сервер Hytpotchi недоступен: {e:#}");
-                anyhow::anyhow!("Сервер Hytpotchi недоступен — проверьте интернет")
-            })?
+    // Сеть может подвести и на отправке, и посреди ответа (застрявшее тело, обрыв VPN).
+    // Тогда обходим прокси и пробуем ещё раз. Ответ сервера с ошибкой (4xx/5xx) не повторяем.
+    let mut last = None;
+    for attempt in 0..3u64 {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_millis(500 * attempt)).await;
         }
-    };
-    if !resp.status().is_success() {
-        return Err(server_error(resp).await);
+        let resp = match build().send().await {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("Сервер Hytpotchi (попытка {}): {}", attempt + 1, error_chain(&e));
+                http.network_failed();
+                last = Some(e);
+                continue;
+            }
+        };
+        if !resp.status().is_success() {
+            return Err(server_error(resp).await);
+        }
+        match resp.json::<Value>().await {
+            Ok(v) => return Ok(v),
+            Err(e) if e.is_decode() && !e.is_timeout() && e.status().is_none() && !is_body_error(&e) => {
+                return Err(anyhow::anyhow!("Сервер Hytpotchi ответил непонятно — обновите лаунчер"));
+            }
+            Err(e) => {
+                log::warn!("Сервер Hytpotchi: ответ оборвался (попытка {}): {}", attempt + 1, error_chain(&e));
+                http.network_failed();
+                last = Some(e);
+            }
+        }
     }
-    Ok(resp.json().await?)
+    if let Some(e) = last {
+        log::warn!("Сервер Hytpotchi недоступен: {}", error_chain(&e));
+    }
+    bail!("Сервер Hytpotchi недоступен — проверьте интернет")
+}
+
+/// Полная цепочка причин ошибки reqwest (в Display он показывает только верхний уровень)
+fn error_chain(e: &reqwest::Error) -> String {
+    let mut out = e.to_string();
+    let mut src = std::error::Error::source(e);
+    while let Some(s) = src {
+        out.push_str(": ");
+        out.push_str(&s.to_string());
+        src = s.source();
+    }
+    out
+}
+
+/// Ошибка чтения тела (обрыв/тайм-аут посреди ответа), а не кривой JSON
+fn is_body_error(e: &reqwest::Error) -> bool {
+    error_chain(e).contains("body")
 }
 
 pub async fn register(http: &HttpClient, nick: &str, password: &str) -> Result<AuthReply> {

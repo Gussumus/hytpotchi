@@ -4,11 +4,14 @@
 //! «что я делаю» и получает снимок: друзья, заявки, приглашения. Снимок кешируется
 //! здесь и уходит в интерфейс событием `friends-update`; новые приглашения — `friends-invite`.
 //!
-//! Открытый мир («Открыть для сети») лаунчер сам пробрасывает друзьям через туннель
-//! сервера Hytpotchi — без модов. Если стоит e4mc, друзьям отдаётся его адрес.
+//! Открытый мир («Открыть для сети») лаунчер сам открывает друзьям — без модов:
+//! напрямую через проброс порта на роутере (UPnP), через релей Hytpotchi в России
+//! или через туннель сервера Hytpotchi. Если стоит e4mc, друзьям отдаётся его адрес.
 
+pub mod direct;
 pub mod pack;
 pub mod presence;
+pub mod punch;
 pub mod tunnel;
 
 use std::collections::HashSet;
@@ -94,6 +97,10 @@ pub struct FriendsService {
     /// Не синхронизироваться параллельно (фон + кнопка в интерфейсе)
     lock: tokio::sync::Mutex<()>,
     tunnels: Arc<tunnel::Tunnels>,
+    /// Проброс порта открытого мира на роутере
+    direct: direct::DirectHost,
+    /// Прямые соединения с гостями (пробитие NAT)
+    punch: punch::PunchHost,
     pack: Mutex<Option<PackCache>>,
     /// Неудачных синхронизаций подряд: ошибку показываем со второй, чтобы разовый сбой сети не мигал
     failures: std::sync::atomic::AtomicU32,
@@ -260,6 +267,8 @@ impl FriendsService {
         }
         if !cfg.friends || !configured || account.is_none() {
             self.tunnels.stop_host();
+            self.punch.stop();
+            self.direct.stop().await;
             let mut s = self.state.lock();
             s.syncing = false;
             s.error = None;
@@ -273,6 +282,15 @@ impl FriendsService {
         }
 
         let mut hosts = hosts;
+        // Мир через туннель лаунчера — пробуем открыть его и напрямую (проброс на роутере)
+        let relay_port = hosts.first().filter(|h| h.relay).and_then(|h| h.port);
+        let direct_addr = match relay_port {
+            Some(port) => self.direct.ensure(port).await,
+            None => {
+                self.direct.stop().await;
+                None
+            }
+        };
         let result = async {
             let (_, token) = Self::token(app).await?;
             let http = app.state::<HttpClient>();
@@ -289,18 +307,39 @@ impl FriendsService {
             if let Some(hash) = pack_hash {
                 body["host"]["pack"] = hash.into();
             }
+            if let Some(addr) = &direct_addr {
+                body["host"]["direct"] = addr.clone().into();
+            }
             hytpotchi::post(&http, "/api/friends/sync", Some(&token), body).await
         }
         .await;
         self.state.lock().hosted = hosts.clone();
 
         // Туннель хозяина: сервер выдал hostId/secret — держим мир открытым
+        // на релее в России (если он есть) и на сервере Hytpotchi
         if let Ok(snap) = &result {
             let relay = &snap["me"]["relay"];
             let port = hosts.iter().find(|h| h.relay).and_then(|h| h.port);
             match (relay["hostId"].as_str(), relay["secret"].as_str(), port, hytpotchi::server()) {
-                (Some(id), Some(secret), Some(port), Ok(server)) => self.tunnels.ensure_host(&server, id, secret, port),
-                _ => self.tunnels.stop_host(),
+                (Some(id), Some(secret), Some(port), Ok(server)) => {
+                    let mut routes = Vec::new();
+                    if let (Some(url), Some(token)) = (relay["via"]["url"].as_str(), relay["via"]["token"].as_str()) {
+                        if url.starts_with("ws://") || url.starts_with("wss://") {
+                            routes.push((url.to_string(), token.to_string()));
+                        }
+                    }
+                    routes.push((server, secret.to_string()));
+                    self.tunnels.ensure_host(&routes, id, port);
+                    // Гости могут прийти и напрямую (пробитие NAT)
+                    match Self::token(app).await {
+                        Ok((_, token)) => self.punch.ensure(&app.state::<HttpClient>(), &token, port),
+                        Err(_) => self.punch.stop(),
+                    }
+                }
+                _ => {
+                    self.tunnels.stop_host();
+                    self.punch.stop();
+                }
             }
         }
 
@@ -371,9 +410,10 @@ impl FriendsService {
         // Первый билет уже есть, но живёт 5 минут, а игра до подключения может долго скачиваться:
         // берём его, только если он свежий; иначе — и для всех следующих соединений — новый
         let first_ticket = Arc::new(Mutex::new(
-            first["ticket"].as_str().map(|t| (t.to_string(), std::time::Instant::now())),
+            tunnel::JoinPass::from_reply(&first).ok().map(|p| (p, std::time::Instant::now())),
         ));
         let friend_id = friend_id.to_string();
+        let punch = Self::punch_source(&http, &token, &friend_id);
         let tickets: tunnel::TicketSource = Arc::new(move || {
             let (http, token, friend_id, first_ticket) = (http.clone(), token.clone(), friend_id.clone(), first_ticket.clone());
             Box::pin(async move {
@@ -383,10 +423,19 @@ impl FriendsService {
                     }
                 }
                 let r = hytpotchi::post(&http, "/api/friends/join", Some(&token), json!({ "id": friend_id })).await?;
-                r["ticket"].as_str().map(str::to_string).ok_or_else(|| anyhow::anyhow!("Сервер не выдал билет"))
+                tunnel::JoinPass::from_reply(&r)
             })
         });
-        self.tunnels.start_guest(&server, &host_id, tickets).await
+        self.tunnels.start_guest(&server, &host_id, tickets, Some(punch)).await
+    }
+
+    /// Как установить прямое соединение с другом (пробитие NAT через хаб)
+    fn punch_source(http: &HttpClient, token: &str, friend_id: &str) -> tunnel::PunchSource {
+        let (http, token, friend_id) = (http.clone(), token.to_string(), friend_id.to_string());
+        Arc::new(move || {
+            let (http, token, friend_id) = (http.clone(), token.clone(), friend_id.clone());
+            Box::pin(async move { punch::guest_session(&http, &token, &friend_id).await })
+        })
     }
 
     /// Миры друзей в списке серверов Minecraft («Сетевая игра»).
@@ -452,14 +501,15 @@ impl FriendsService {
             bail!("Сервер не открыл туннель");
         }
         let friend_id = friend_id.to_string();
+        let punch = Self::punch_source(&http, &token, &friend_id);
         let tickets: tunnel::TicketSource = Arc::new(move || {
             let (http, token, friend_id) = (http.clone(), token.clone(), friend_id.clone());
             Box::pin(async move {
                 let r = hytpotchi::post(&http, "/api/friends/join", Some(&token), json!({ "id": friend_id })).await?;
-                r["ticket"].as_str().map(str::to_string).ok_or_else(|| anyhow::anyhow!("Сервер не выдал билет"))
+                tunnel::JoinPass::from_reply(&r)
             })
         });
-        let addr = self.tunnels.start_guest(&server, &host_id, tickets).await?;
+        let addr = self.tunnels.start_guest(&server, &host_id, tickets, Some(punch)).await?;
         Ok((host_id, addr))
     }
 
@@ -492,6 +542,8 @@ impl FriendsService {
     pub async fn go_offline(&self, app: &AppHandle) {
         self.tunnels.stop_host();
         self.tunnels.stop_guest();
+        self.punch.stop();
+        self.direct.stop().await;
         let Ok((_, token)) = Self::token(app).await else { return };
         let http = app.state::<HttpClient>();
         let _ = tokio::time::timeout(

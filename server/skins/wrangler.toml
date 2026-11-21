@@ -26,3 +26,8 @@ class_name = "TunnelRelay"
 [[migrations]]
 tag = "v2-tunnel"
 new_sqlite_classes = ["TunnelRelay"]
+
+# Релей в России для игры без VPN (см. server/relay/README.md). Ключ — секретом:
+#   npx wrangler secret put RELAY_KEY
+# [vars]
+# RELAY_URL = "ws://<IP VPS>:8443"

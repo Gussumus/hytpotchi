@@ -123,6 +123,9 @@ fn windows_proxy() -> Option<ProxyConfig> {
 pub struct Liveness {
     cfg: ProxyConfig,
     state: Arc<Mutex<Option<(Instant, bool)>>>,
+    /// Прокси принимает соединения, но запросы через него не проходят (VPN без связи):
+    /// до этого момента идём напрямую
+    suspended_until: Arc<Mutex<Option<Instant>>>,
 }
 
 const CACHE_FOR: Duration = Duration::from_secs(3);
@@ -130,7 +133,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_millis(400);
 
 impl Liveness {
     pub fn new(cfg: ProxyConfig) -> Self {
-        Self { cfg, state: Arc::new(Mutex::new(None)) }
+        Self { cfg, state: Arc::new(Mutex::new(None)), suspended_until: Arc::new(Mutex::new(None)) }
     }
 
     pub fn url(&self) -> &str {
@@ -141,7 +144,20 @@ impl Liveness {
         (self.cfg.host.as_str(), self.cfg.port).to_socket_addrs().map(|a| a.collect()).unwrap_or_default()
     }
 
+    /// Не пользоваться прокси какое-то время (после сбоя запроса через него)
+    pub fn suspend(&self, for_: Duration) {
+        let until = Instant::now() + for_;
+        let mut s = self.suspended_until.lock();
+        if s.is_none_or(|u| u < Instant::now()) {
+            log::warn!("Запрос через прокси {} не прошёл — {} с идём напрямую", self.cfg.url, for_.as_secs());
+        }
+        *s = Some(until);
+    }
+
     pub fn alive(&self) -> bool {
+        if self.suspended_until.lock().is_some_and(|u| u > Instant::now()) {
+            return false;
+        }
         if let Some((at, ok)) = *self.state.lock() {
             if at.elapsed() < CACHE_FOR {
                 return ok;
@@ -184,7 +200,11 @@ mod tests {
         assert!(!live.alive());
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        assert!(Liveness::new(parse(&format!("127.0.0.1:{port}")).unwrap()).alive());
+        let live = Liveness::new(parse(&format!("127.0.0.1:{port}")).unwrap());
+        assert!(live.alive());
+        // После сбоя запроса прокси не используется, даже если порт открыт
+        live.suspend(Duration::from_secs(60));
+        assert!(!live.alive());
     }
 }
 

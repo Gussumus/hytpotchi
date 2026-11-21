@@ -49,38 +49,66 @@ pub type ByteProgress<'a> = &'a (dyn Fn(u64, Option<u64>) + Send + Sync);
 #[derive(Clone)]
 pub struct HttpClient {
     pub client: Client,
+    /// Без пула соединений: каждый запрос — новое соединение (HTTP/1.1).
+    /// Для сервера Hytpotchi на Cloudflare: у части провайдеров без VPN повторно
+    /// используемое keep-alive соединение к Cloudflare через пару запросов «замерзает»
+    /// (тайм-аут 20 с, потом обрыв), а свежие соединения проходят.
+    pub oneshot: Client,
+    /// Системный прокси (если есть) — его можно временно обойти после сбоя
+    proxy: Option<super::proxy::Liveness>,
 }
+
+/// На сколько обходить прокси после неудачного запроса через него
+const PROXY_PAUSE: Duration = Duration::from_secs(60);
 
 impl HttpClient {
     pub fn new() -> Result<Self> {
-        let mut builder = ClientBuilder::new();
+        let mut proxy = None;
+        let mut route: Option<(super::proxy::Liveness, reqwest::Url)> = None;
         // Системный прокси (VPN-программы) — только пока он принимает соединения, иначе напрямую.
         // Явный .proxy() отключает встроенный автоподхват прокси reqwest, так что решаем сами.
-        match super::proxy::detect() {
-            Some(cfg) => {
-                let live = super::proxy::Liveness::new(cfg);
-                log::info!("Найден прокси {} — используется, пока отвечает", live.url());
-                let target = reqwest::Url::parse(live.url()).context("Некорректный адрес прокси")?;
-                builder = builder.proxy(reqwest::Proxy::custom(move |url| {
+        if let Some(cfg) = super::proxy::detect() {
+            let live = super::proxy::Liveness::new(cfg);
+            log::info!("Найден прокси {} — используется, пока отвечает", live.url());
+            proxy = Some(live.clone());
+            let target = reqwest::Url::parse(live.url()).context("Некорректный адрес прокси")?;
+            route = Some((live, target));
+        }
+        let make = |pooled: bool| -> Result<Client> {
+            let mut builder = ClientBuilder::new();
+            builder = match route.clone() {
+                Some((live, target)) => builder.proxy(reqwest::Proxy::custom(move |url| {
                     // Свой компьютер — всегда напрямую
                     let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"));
                     (!local && live.alive()).then(|| target.clone())
-                }));
-            }
-            None => builder = builder.no_proxy(),
+                })),
+                None => builder.no_proxy(),
+            };
+            builder = if pooled {
+                builder.pool_max_idle_per_host(32)
+            } else {
+                builder.pool_max_idle_per_host(0).http1_only()
+            };
+            builder
+                .connect_timeout(Duration::from_secs(15))
+                .read_timeout(Duration::from_secs(60))
+                .user_agent(concat!(
+                    "Hytpotchi/",
+                    env!("CARGO_PKG_VERSION"),
+                    " (github.com/hytpotchi/launcher)"
+                ))
+                .build()
+                .context("Не удалось создать HTTP-клиент")
+        };
+        Ok(Self { client: make(true)?, oneshot: make(false)?, proxy })
+    }
+
+    /// Запрос не прошёл (обрыв, тайм-аут, застрявший ответ). Если шли через прокси —
+    /// на минуту обходим его: следующий повтор пойдёт напрямую.
+    pub fn network_failed(&self) {
+        if let Some(p) = &self.proxy {
+            p.suspend(PROXY_PAUSE);
         }
-        let client = builder
-            .connect_timeout(Duration::from_secs(15))
-            .read_timeout(Duration::from_secs(60))
-            .pool_max_idle_per_host(32)
-            .user_agent(concat!(
-                "Hytpotchi/",
-                env!("CARGO_PKG_VERSION"),
-                " (github.com/hytpotchi/launcher)"
-            ))
-            .build()
-            .context("Не удалось создать HTTP-клиент")?;
-        Ok(Self { client })
     }
 
     /// GET с проверкой статуса
@@ -116,13 +144,17 @@ impl HttpClient {
             match self.get(url).await {
                 Ok(resp) => match resp.json::<T>().await {
                     Ok(v) => return Ok(v),
-                    Err(e) => last_err = Some(anyhow::Error::from(e)),
+                    Err(e) => {
+                        self.network_failed();
+                        last_err = Some(anyhow::Error::from(e));
+                    }
                 },
                 Err(e) => {
                     // 4xx повторять бессмысленно
                     if is_client_error(&e) {
                         return Err(e);
                     }
+                    self.network_failed();
                     last_err = Some(e);
                 }
             }
@@ -163,6 +195,7 @@ impl HttpClient {
                     if is_client_error(&e) {
                         return Err(e);
                     }
+                    self.network_failed();
                     last_err = Some(e);
                 }
             }

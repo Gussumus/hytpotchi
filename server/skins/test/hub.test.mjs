@@ -217,6 +217,78 @@ assert.equal(bobView.friends[0].host.mods, 1)
 await fr('invite', { to: aliceView.friends[0].id }, A2)
 assert.equal((await fr('sync', {}, B)).body.invites.at(-1).pack, put.body.hash)
 
+// ---------- Прямой адрес и релей в России ----------
+const { verifyRelay } = await import(new URL('../src/relaytoken.ts', import.meta.url).href)
+const { cleanDirect, relayVia } = await import(new URL('../src/hub.ts', import.meta.url).href)
+assert.equal(cleanDirect('93.184.216.34:25565'), '93.184.216.34:25565')
+for (const bad of ['192.168.0.5:25565', '10.0.0.1:25565', '100.64.1.1:25565', '127.0.0.1:25565', '172.20.0.1:25565', '93.184.216.34:80', 'example.com:25565', '300.1.1.1:25565', 'x', null]) {
+  assert.equal(cleanDirect(bad), null, String(bad))
+}
+assert.equal(relayVia({}), null)
+assert.equal(relayVia({ RELAY_URL: 'wss://relay.test', RELAY_KEY: 'short' }), null)
+assert.equal(relayVia({ RELAY_URL: 'https://relay.test', RELAY_KEY: 'k'.repeat(40) }), null)
+assert.deepEqual(relayVia({ RELAY_URL: 'wss://relay.test:8443/', RELAY_KEY: 'k'.repeat(40) }), { url: 'wss://relay.test:8443', key: 'k'.repeat(40) })
+
+const viaKey = 'k'.repeat(40)
+hub = new Hub(storage, tunnels, () => clock, { url: 'wss://relay.test', key: viaKey })
+const openWorld = (direct) => ({ host: { relay: true, world: 'Остров', mc: '26.3', loader: null, direct } })
+let hs = (await fr('sync', openWorld('93.184.216.34:25565'), A2)).body
+// Хозяину — пропуск на релей (только для его мира и только как хозяину)
+assert.equal(hs.me.relay.via.url, 'wss://relay.test')
+assert.ok(await verifyRelay(viaKey, 'h', hs.me.relay.hostId, hs.me.relay.via.token, clock))
+assert.ok(!(await verifyRelay(viaKey, 'j', hs.me.relay.hostId, hs.me.relay.via.token, clock)))
+assert.ok(!(await verifyRelay(viaKey, 'h', 'f'.repeat(24), hs.me.relay.via.token, clock)))
+assert.ok(!(await verifyRelay('x'.repeat(40), 'h', hs.me.relay.hostId, hs.me.relay.via.token, clock)))
+// IP хозяина не виден в списке друзей…
+const bobSees = (await fr('sync', {}, B)).body
+assert.ok(!JSON.stringify(bobSees).includes('93.184.216.34'))
+assert.equal(bobSees.friends[0].host.relay, true)
+// …а только тому, кто заходит; вместе с пропуском гостя на релей
+const jv = (await fr('join', { id: hs.me.id }, B)).body
+assert.equal(jv.direct, '93.184.216.34:25565')
+assert.equal(jv.via.url, 'wss://relay.test')
+assert.ok(await verifyRelay(viaKey, 'j', jv.hostId, jv.via.ticket, clock))
+assert.ok(!(await verifyRelay(viaKey, 'h', jv.hostId, jv.via.ticket, clock)), 'гость не может стать хозяином')
+assert.ok(!(await verifyRelay(viaKey, 'j', jv.hostId, jv.via.ticket, clock + 6 * 60_000)), 'пропуск гостя истекает')
+// Локальный адрес хозяина друзьям не отдаётся
+hs = (await fr('sync', openWorld('192.168.1.2:25565'), A2)).body
+assert.equal((await fr('join', { id: hs.me.id }, B)).body.direct, null)
+// Без релея — как раньше
+hub = new Hub(storage, tunnels, () => clock)
+hs = (await fr('sync', openWorld(null), A2)).body
+assert.equal(hs.me.relay.via, undefined)
+assert.equal((await fr('join', { id: hs.me.id }, B)).body.via, null)
+
+// ---------- Пробитие NAT ----------
+// Мир Алисы открыт (выше); Боб просит прямое соединение
+const alId = hs.me.id
+assert.equal((await fr('punch', { id: alId, addr: '192.168.0.5:5000' }, B)).status, 400, 'локальный адрес')
+assert.equal((await fr('punch', { id: alId, addr: '5.6.7.8:5000' }, eve)).status, 403, 'не друг')
+const pr = await fr('punch', { id: alId, addr: '5.6.7.8:5000' }, B)
+assert.equal(pr.status, 200)
+assert.match(pr.body.key, /^[0-9a-f]{32}$/)
+// Хозяин видит заявку (с ключом), другие — нет
+let poll = (await fr('punch/poll', {}, A2)).body.punches
+assert.deepEqual(poll, [{ nonce: pr.body.nonce, addr: '5.6.7.8:5000', key: pr.body.key }])
+assert.deepEqual((await fr('punch/poll', {}, B)).body.punches, [])
+// Ответа ещё нет; чужой ответ не принимается
+assert.equal((await fr('punch/wait', { nonce: pr.body.nonce }, B)).body.answer, null)
+assert.equal((await fr('punch/wait', { nonce: pr.body.nonce }, eve)).status, 404)
+assert.equal((await fr('punch/answer', { nonce: pr.body.nonce, addr: '9.9.9.9:4000', cert: 'a'.repeat(64) }, B)).status, 404)
+assert.equal((await fr('punch/answer', { nonce: pr.body.nonce, addr: '10.0.0.1:4000', cert: 'a'.repeat(64) }, A2)).status, 400)
+assert.equal((await fr('punch/answer', { nonce: pr.body.nonce, addr: '9.9.9.9:4000', cert: 'a'.repeat(64) }, A2)).status, 200)
+assert.deepEqual((await fr('punch/wait', { nonce: pr.body.nonce }, B)).body.answer, { addr: '9.9.9.9:4000', cert: 'a'.repeat(64) })
+// Отвеченная заявка больше не показывается хозяину; старые — исчезают
+assert.deepEqual((await fr('punch/poll', {}, A2)).body.punches, [])
+await fr('punch', { id: alId, addr: '5.6.7.8:5001' }, B)
+clock += 31_000
+await fr('sync', openWorld(null), A2)
+assert.deepEqual((await fr('punch/poll', {}, A2)).body.punches, [])
+// Мир закрыт — пробивать некуда
+await fr('sync', { host: null }, A2)
+assert.equal((await fr('punch', { id: alId, addr: '5.6.7.8:5000' }, B)).status, 409)
+await fr('sync', openWorld(null), A2)
+
 // Удаление
 await fr('remove', { id: aliceView.me.id }, B)
 assert.equal((await fr('sync', {}, A2)).body.friends.length, 0)

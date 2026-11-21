@@ -18,7 +18,12 @@
  *   remove   {id}                        → {ok}
  *   invite   {to, address?, instance, note} → {ok}
  *   dismiss  {id}                        → {ok}
- *   join     {id}                        → {hostId, ticket}   (вход в мир друга через туннель)
+ *   join     {id}                        → {hostId, ticket, direct?, via?}   (вход в мир друга)
+ *            direct — адрес хозяина из интернета (проброс UPnP), via — релей в России {url, ticket}
+ *   punch        {id, addr}              → {nonce, key}    гость: «пробить NAT» к миру друга, addr — свой UDP-адрес (STUN)
+ *   punch/poll                          → {punches: [{nonce, addr, key}]}   хозяин: кто хочет войти
+ *   punch/answer {nonce, addr, cert}    → {ok}            хозяин: свой UDP-адрес и отпечаток сертификата QUIC
+ *   punch/wait   {nonce}                → {answer: {addr, cert} | null}     гость: ответ хозяина
  *   pack     {pack}                      → {hash}   (опись модов сборки хозяина, до 1 МБ)
  *   pack/get {id}                        → {pack, hash}   (опись сборки друга — только друзьям)
  *
@@ -26,6 +31,8 @@
  * других игроков не путаются. Пароль хранится как PBKDF2-SHA256 (100 000 итераций, соль),
  * токены и код восстановления — только как SHA-256.
  */
+
+import { signRelay } from './relaytoken.ts'
 
 export interface StorageLike {
   get<T = unknown>(key: string): Promise<T | undefined>
@@ -69,6 +76,8 @@ export interface Host {
   pack?: string | null
   /** Сколько модов в сборке хозяина */
   mods?: number | null
+  /** Прямой адрес мира из интернета (ip:порт, проброшен UPnP) — отдаётся только в join */
+  direct?: string | null
 }
 
 interface Presence {
@@ -78,6 +87,18 @@ interface Presence {
   /** Туннель хозяина (только для владельца — друзьям не отдаётся) */
   relay?: { hostId: string; secret: string } | null
   lastSeen: number
+}
+
+/** Заявка гостя на прямое соединение с хозяином мира */
+interface Punch {
+  nonce: string
+  /** Ключ, которым гость подтверждает каждое соединение хозяину */
+  key: string
+  guest: string
+  host: string
+  addr: string
+  at: number
+  answer: { addr: string; cert: string } | null
 }
 
 /** Во входящих from — кто прислал; в исходящих from — кому отправлена */
@@ -102,6 +123,11 @@ const ONLINE_MS = 150_000
 const PERSIST_MS = 120_000
 const INVITE_TTL = 15 * 60_000
 const TICKET_TTL = 5 * 60_000
+/** Сколько ждать хозяина при пробитии NAT */
+const PUNCH_TTL = 30_000
+const MAX_PUNCHES = 200
+/** Пропуск хозяина на релее; хаб продлевает его при каждой синхронизации */
+const HOST_PASS_TTL = 12 * 60 * 60_000
 const MAX_FRIENDS = 200
 const MAX_REQUESTS = 50
 const MAX_INVITES = 20
@@ -192,6 +218,30 @@ function cleanActivity(raw: unknown): Activity | null {
   return { instance: str(r.instance, 64) ?? 'Minecraft', mc, loader: str(r.loader, 16), server: str(r.server, 255) }
 }
 
+/** Публичный IPv4 и порт: друг будет подключаться к нему напрямую, поэтому никаких локальных адресов */
+export function cleanDirect(raw: unknown, minPort = 1024): string | null {
+  const a = str(raw, 32)
+  const m = a ? /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}):(\d{1,5})$/.exec(a) : null
+  if (!m) return null
+  const [o1, o2, o3, o4, port] = m.slice(1).map(Number)
+  if ([o1, o2, o3, o4].some((o) => o > 255) || port < minPort || port > 65535) return null
+  const local =
+    o1 === 0 || o1 === 10 || o1 === 127 || o1 >= 224 ||
+    (o1 === 100 && o2 >= 64 && o2 < 128) || // CGNAT
+    (o1 === 169 && o2 === 254) ||
+    (o1 === 172 && o2 >= 16 && o2 < 32) ||
+    (o1 === 192 && o2 === 168) ||
+    (o1 === 192 && o2 === 0 && o3 === 0) ||
+    (o1 === 198 && (o2 === 18 || o2 === 19))
+  return local ? null : `${o1}.${o2}.${o3}.${o4}:${port}`
+}
+
+/** Внешний релей (сервер в России): адрес для лаунчеров и ключ подписи пропусков */
+export interface RelayVia {
+  url: string
+  key: string
+}
+
 function cleanHost(raw: unknown): Host | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
@@ -200,7 +250,7 @@ function cleanHost(raw: unknown): Host | null {
   const pack = typeof r.pack === 'string' && /^[0-9a-f]{64}$/.test(r.pack) ? r.pack : null
   const mods = typeof r.mods === 'number' && r.mods >= 0 && r.mods < 10_000 ? Math.floor(r.mods) : null
   const base = { world: str(r.world, 64), mc, loader: str(r.loader, 16), pack, mods }
-  if (r.relay === true) return { ...base, relay: true, address: null }
+  if (r.relay === true) return { ...base, relay: true, address: null, direct: cleanDirect(r.direct) }
   try {
     return { ...base, relay: false, address: cleanAddress(r.address) }
   } catch {
@@ -211,14 +261,18 @@ function cleanHost(raw: unknown): Host | null {
 export class Hub {
   /** Свежие статусы в памяти (между записями в хранилище) */
   private presence = new Map<string, Presence>()
+  /** Пробитие NAT: заявки гостей живут секунды, поэтому только в памяти */
+  private punches = new Map<string, Punch>()
   private storage: StorageLike
   private tunnels: TunnelControl | null
   private now: () => number
+  private via: RelayVia | null
 
-  constructor(storage: StorageLike, tunnels: TunnelControl | null, now: () => number = Date.now) {
+  constructor(storage: StorageLike, tunnels: TunnelControl | null, now: () => number = Date.now, via: RelayVia | null = null) {
     this.storage = storage
     this.tunnels = tunnels
     this.now = now
+    this.via = via
   }
 
   // ---------- Хранилище ----------
@@ -408,7 +462,12 @@ export class Hub {
     if (changed || !stored || next.lastSeen - stored.lastSeen > PERSIST_MS) {
       await this.storage.put(`p:${me.id}`, next)
     }
-    return this.snapshot(me, relay)
+    // Пропуск хозяина на внешний релей — продлевается каждой синхронизацией
+    const mine =
+      relay && this.via
+        ? { ...relay, via: { url: this.via.url, token: await signRelay(this.via.key, 'h', relay.hostId, this.now() + HOST_PASS_TTL) } }
+        : relay
+    return this.snapshot(me, mine)
   }
 
   async offline(me: User) {
@@ -423,7 +482,7 @@ export class Hub {
     return !!p && p.status !== 'invisible' && this.now() - p.lastSeen < ONLINE_MS
   }
 
-  async snapshot(me: User, relay?: { hostId: string; secret: string } | null) {
+  async snapshot(me: User, relay?: (NonNullable<Presence['relay']> & { via?: { url: string; token: string } }) | null) {
     const friendIds = await this.list<string>(`f:${me.id}`)
     const friends = []
     for (const id of friendIds) {
@@ -437,7 +496,8 @@ export class Hub {
         online,
         status: online ? p.status : 'offline',
         activity: online ? p.activity : null,
-        host: online ? p.host : null,
+        // Прямой адрес (IP хозяина) — не всем друзьям в списке, а только тому, кто заходит (join)
+        host: online && p.host ? { ...p.host, direct: undefined } : null,
         lastSeen: p && p.status !== 'invisible' ? p.lastSeen : null,
       })
     }
@@ -597,8 +657,63 @@ export class Hub {
     const alive = !!p && this.now() - p.lastSeen < ONLINE_MS
     if (!alive || !p.relay || !this.tunnels) throw new HttpError(409, 'Мир друга сейчас закрыт')
     const ticket = randomHex(24)
-    await this.tunnels.allow(p.relay.hostId, await sha256Hex(ticket), this.now() + TICKET_TTL)
-    return { hostId: p.relay.hostId, ticket }
+    const expires = this.now() + TICKET_TTL
+    await this.tunnels.allow(p.relay.hostId, await sha256Hex(ticket), expires)
+    const via = this.via ? { url: this.via.url, ticket: await signRelay(this.via.key, 'j', p.relay.hostId, expires) } : null
+    return { hostId: p.relay.hostId, ticket, direct: p.host?.direct ?? null, via }
+  }
+
+  // ---------- Прямое соединение (пробитие NAT) ----------
+
+  private dropOldPunches() {
+    const now = this.now()
+    for (const [nonce, p] of this.punches) if (now - p.at > PUNCH_TTL * 2) this.punches.delete(nonce)
+  }
+
+  /** Гость хочет войти в мир друга напрямую: его UDP-адрес уходит хозяину */
+  async punch(me: User, body: Record<string, unknown>) {
+    const hostUser = String(body.id ?? '')
+    if (!(await this.isFriend(me.id, hostUser))) throw new HttpError(403, 'Заходить можно только к друзьям')
+    const p = await this.presenceOf(hostUser)
+    const alive = !!p && this.now() - p.lastSeen < ONLINE_MS
+    if (!alive || !p.relay) throw new HttpError(409, 'Мир друга сейчас закрыт')
+    const addr = cleanDirect(body.addr, 1)
+    if (!addr) throw new HttpError(400, 'Некорректный адрес')
+    this.dropOldPunches()
+    if (this.punches.size >= MAX_PUNCHES || [...this.punches.values()].filter((x) => x.guest === me.id).length >= 5) {
+      throw new HttpError(429, 'Слишком много попыток — подождите немного')
+    }
+    const punch: Punch = { nonce: randomHex(12), key: randomHex(16), guest: me.id, host: hostUser, addr, at: this.now(), answer: null }
+    this.punches.set(punch.nonce, punch)
+    return { nonce: punch.nonce, key: punch.key }
+  }
+
+  /** Хозяин: заявки на прямое соединение, на которые он ещё не ответил */
+  async punchPoll(me: User) {
+    this.dropOldPunches()
+    const now = this.now()
+    const punches = [...this.punches.values()]
+      .filter((p) => p.host === me.id && !p.answer && now - p.at < PUNCH_TTL)
+      .map((p) => ({ nonce: p.nonce, addr: p.addr, key: p.key }))
+    return { punches }
+  }
+
+  /** Хозяин: свой UDP-адрес и отпечаток сертификата для гостя */
+  async punchAnswer(me: User, body: Record<string, unknown>) {
+    const p = this.punches.get(String(body.nonce ?? ''))
+    if (!p || p.host !== me.id) throw new HttpError(404, 'Заявка устарела')
+    const addr = cleanDirect(body.addr, 1)
+    const cert = typeof body.cert === 'string' && /^[0-9a-f]{64}$/.test(body.cert) ? body.cert : null
+    if (!addr || !cert) throw new HttpError(400, 'Некорректный ответ')
+    p.answer = { addr, cert }
+    return { ok: true }
+  }
+
+  /** Гость: ответ хозяина (null — ещё ждём) */
+  async punchWait(me: User, body: Record<string, unknown>) {
+    const p = this.punches.get(String(body.nonce ?? ''))
+    if (!p || p.guest !== me.id) throw new HttpError(404, 'Заявка устарела')
+    return { answer: p.answer }
   }
 
   // ---------- Сборки ----------
@@ -689,6 +804,14 @@ export class Hub {
           return json(await this.dismiss(me, body))
         case '/api/friends/join':
           return json(await this.join(me, body))
+        case '/api/friends/punch':
+          return json(await this.punch(me, body))
+        case '/api/friends/punch/poll':
+          return json(await this.punchPoll(me))
+        case '/api/friends/punch/answer':
+          return json(await this.punchAnswer(me, body))
+        case '/api/friends/punch/wait':
+          return json(await this.punchWait(me, body))
         case '/api/friends/pack':
           return json(await this.putPack(me, text))
         case '/api/friends/pack/get':
@@ -731,6 +854,14 @@ export function tunnelControl(ns: DONamespace | undefined): TunnelControl | null
   }
 }
 
+/** Внешний релей включён, если заданы адрес (wrangler.toml [vars]) и ключ (wrangler secret) */
+export function relayVia(env: { RELAY_URL?: string; RELAY_KEY?: string } | undefined): RelayVia | null {
+  const url = env?.RELAY_URL?.trim().replace(/\/+$/, '')
+  const key = env?.RELAY_KEY?.trim()
+  if (!url || !key || !/^wss?:\/\/[^\s/]+$/.test(url) || key.length < 32) return null
+  return { url, key }
+}
+
 /**
  * Durable Object хаба. Один экземпляр на весь сервер (idFromName('hub')): единая точка
  * избавляет от гонок при регистрации ников и заявках.
@@ -739,8 +870,8 @@ export function tunnelControl(ns: DONamespace | undefined): TunnelControl | null
 export class FriendsHub {
   private hub: Hub
 
-  constructor(state: { storage: StorageLike }, env: { TUNNEL?: DONamespace }) {
-    this.hub = new Hub(state.storage, tunnelControl(env?.TUNNEL))
+  constructor(state: { storage: StorageLike }, env: { TUNNEL?: DONamespace; RELAY_URL?: string; RELAY_KEY?: string }) {
+    this.hub = new Hub(state.storage, tunnelControl(env?.TUNNEL), Date.now, relayVia(env))
   }
 
   fetch(request: Request): Promise<Response> {

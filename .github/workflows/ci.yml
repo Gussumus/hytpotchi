@@ -25,7 +25,7 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - run: npx oxlint src server/skins
+      - run: npx oxlint src server/skins server/relay
 
       - name: Rust
         working-directory: src-tauri
@@ -36,3 +36,4 @@ jobs:
           node --experimental-strip-types server/skins/test/worker.test.mjs
           node --experimental-strip-types server/skins/test/hub.test.mjs
           node --experimental-strip-types server/skins/test/tunnel.test.mjs
+          node --experimental-strip-types server/relay/test/relay.test.mjs
