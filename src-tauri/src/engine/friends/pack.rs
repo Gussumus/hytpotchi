@@ -114,6 +114,10 @@ pub async fn build(http: &HttpClient, inst: &Instance) -> Result<SharedPack> {
         if name.to_lowercase().contains("e4mc") {
             continue;
         }
+        // Мод косметики лаунчер ставит сам — в описи сборки он не нужен
+        if name == crate::engine::skins::cosmetics::MOD_FILE {
+            continue;
+        }
         let url = found.get(&sha1).and_then(|v| {
             v.files
                 .iter()

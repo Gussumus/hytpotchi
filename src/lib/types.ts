@@ -60,6 +60,26 @@ export interface CapeView {
   image: string | null
 }
 
+/** Деталь косметики: кубы одного цвета на части тела (координаты модели Minecraft) */
+export interface CosmeticPart {
+  bone: 'head' | 'body' | 'left_arm' | 'right_arm'
+  color: string
+  pivot?: [number, number, number]
+  rot?: [number, number, number]
+  anim?: 'flap_left' | 'flap_right' | 'sway' | 'spin'
+  cubes: [number, number, number, number, number, number][]
+}
+
+/** Предмет косметики из каталога сервера Hytpotchi */
+export interface CosmeticDef {
+  id: string
+  name: string
+  slot: string
+  /** Цена в рублях, 0 — бесплатно */
+  price: number
+  parts: CosmeticPart[]
+}
+
 export interface SkinProfile {
   username: string
   uuid: string

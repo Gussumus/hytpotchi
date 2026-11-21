@@ -253,6 +253,28 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
         }
     }
 
+    // Косметика Hytpotchi (шапки, крылья…): свой мод в сборках Fabric подходящей версии
+    {
+        let settings = crate::engine::core::settings::load();
+        let server = settings
+            .shared_skins
+            .then(crate::engine::core::settings::skin_server)
+            .flatten();
+        let cosmetics = crate::engine::skins::cosmetics::supported(&instance);
+        match server.as_deref() {
+            Some(server) if cosmetics => match crate::engine::skins::cosmetics::install(&http, &instance).await {
+                Ok(new) => {
+                    if new {
+                        console("Установлен мод Hytpotchi Cosmetics — видна косметика игроков Hytpotchi".into());
+                    }
+                    auth_jvm.push(crate::engine::skins::cosmetics::jvm_arg(server));
+                }
+                Err(e) => console(format!("Косметика не подключена: {e:#}")),
+            },
+            _ => crate::engine::skins::cosmetics::remove(&instance),
+        }
+    }
+
     // 6½. Игра с друзьями: e4mc превращает «Открыть для сети» в адрес, доступный из интернета
     if instance.loader.is_some() && crate::engine::core::settings::load().friends_hosting {
         match crate::commands::content::ensure_project(&http, &instance, crate::engine::friends::E4MC_PROJECT).await {

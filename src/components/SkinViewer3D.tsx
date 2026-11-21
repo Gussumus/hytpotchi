@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { NameTagObject, SkinViewer } from 'skinview3d'
 import { emoteById, type EmoteId } from '../lib/emotes'
 import { motionReduced } from '../lib/appearance'
+import { attachCosmetics } from '../lib/cosmetics3d'
+import type { CosmeticDef } from '../lib/types'
 
 /** Угол, под которым персонаж стоит по умолчанию: три четверти, чтобы был виден объём */
 const BASE_YAW = -0.45
@@ -38,6 +40,8 @@ interface Props {
   src: string | null
   slim: boolean
   cape?: string | null
+  /** Надетая косметика (шапки, крылья…) */
+  cosmetics?: CosmeticDef[]
   emote?: EmoteId
   /** Разовая эмоция закончилась — можно вернуть «Стоять» */
   onEmoteEnd?: () => void
@@ -48,7 +52,7 @@ interface Props {
 }
 
 /** 3D-предпросмотр скина: вращение мышью, позы и эмоции */
-export function SkinViewer3D({ src, slim, cape, emote = 'idle', onEmoteEnd, onPoke, nameTag, height = 360 }: Props) {
+export function SkinViewer3D({ src, slim, cape, cosmetics, emote = 'idle', onEmoteEnd, onPoke, nameTag, height = 360 }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<SkinViewer | null>(null)
   const endRef = useRef(onEmoteEnd)
@@ -128,6 +132,15 @@ export function SkinViewer3D({ src, slim, cape, emote = 'idle', onEmoteEnd, onPo
     if (cape) viewer.loadCape(cape)
     else viewer.loadCape(null)
   }, [cape])
+
+  // Косметика: строится заново при смене набора (и после перезагрузки скина)
+  const cosmeticsKey = (cosmetics ?? []).map((c) => c.id).join(',')
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || !cosmetics?.length) return
+    return attachCosmetics(viewer, cosmetics)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- набор задаёт cosmeticsKey
+  }, [cosmeticsKey, src, slim])
 
   useEffect(() => {
     const viewer = viewerRef.current

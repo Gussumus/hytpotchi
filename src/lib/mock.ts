@@ -1,6 +1,7 @@
 // Демо-бэкенд для предпросмотра интерфейса в обычном браузере (без Tauri).
 import type { Friend, FriendInvite, FriendPerson, FriendsState, FriendStatus } from './types'
 import type { Account, Instance, LaunchStage, LocalContent, SearchHit } from './types'
+import cosmeticsDemo from './cosmetics-demo.json'
 
 type Handler = (payload: unknown) => void
 const listeners = new Map<string, Set<Handler>>()
@@ -232,6 +233,8 @@ function pickBrowserFile(accept: string): Promise<File | null> {
   })
 }
 
+let demoCosmetics: string[] = ['angel_wings', 'halo']
+
 export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
   await sleep(120)
   const r = (v: unknown) => v as T
@@ -415,6 +418,13 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
     case 'instance_set_cover':
     case 'instance_clear_cover':
       return r(instances.find((i) => i.id === args.id) ?? null)
+    case 'cosmetics_catalog':
+      return r(cosmeticsDemo)
+    case 'cosmetics_get':
+      return r(demoCosmetics)
+    case 'cosmetics_set':
+      demoCosmetics = ((args.items as string[]) ?? []).slice(0, 10)
+      return r(demoCosmetics)
     case 'hytpotchi_cape_upload':
     case 'hytpotchi_cape_remove':
     case 'skin_profile':

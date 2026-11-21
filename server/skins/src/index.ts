@@ -11,6 +11,7 @@
  * Аккаунты и друзья — Durable Object FriendsHub (см. hub.ts):
  *   POST /api/account/*, POST /api/friends/*
  * Плащ (тот же владелец ника): PUT/DELETE /api/capes/{ник}   (PNG 64×32, 128×64, 256×128 или 512×256)
+ * Косметика (мод Hytpotchi Cosmetics): GET /api/cosmetics/catalog, GET|PUT /api/cosmetics/{ник} (см. cosmetics.ts)
  * Скины и плащи на ванилле без модов — API Yggdrasil для authlib-injector: /yggdrasil/* (см. yggdrasil.ts)
  * Туннель «играть вместе без модов» — Durable Object TunnelRelay на каждый мир (см. tunnel.ts):
  *   GET  /api/tunnel/{hostId}/control|data|join   (WebSocket)
@@ -23,6 +24,7 @@
 export { FriendsHub } from './hub.ts'
 export { TunnelRelay } from './tunnel.ts'
 import { handleYggdrasil, rememberUuid, type YggHub } from './yggdrasil.ts'
+import { CATALOG, CATALOG_VERSION, cleanSelection } from './cosmetics.ts'
 
 interface DONamespace {
   idFromName(name: string): unknown
@@ -248,6 +250,30 @@ export default {
         if (!(await mayEditSkin(request, env, name))) return error('Этот ник принадлежит другому игроку', 403)
         await env.SKINS.delete(`profile:${key}`)
         return json({ ok: true })
+      }
+    }
+
+    // Косметика: каталог и что надето у игрока (менять — только владелец ника)
+    if (path === '/api/cosmetics/catalog' && request.method === 'GET') {
+      return json({ version: CATALOG_VERSION, items: CATALOG }, 200, 'public, max-age=300')
+    }
+    const cosMatch = /^\/api\/cosmetics\/([^/]+)$/.exec(path)
+    if (cosMatch) {
+      const name = cosMatch[1]
+      if (!NAME_RE.test(name)) return error('bad name', 400)
+      const key = `cos:${name.toLowerCase()}`
+      if (request.method === 'GET') {
+        const raw = await env.SKINS.get(key)
+        return json({ items: cleanSelection(raw ? JSON.parse(raw) : []) }, 200, 'public, max-age=30')
+      }
+      if (request.method === 'PUT') {
+        if ((await nickAccess(request, env, name)) !== 'owner') {
+          return error('Косметику может менять только владелец ника — войдите в аккаунт Hytpotchi', 403)
+        }
+        const body = (await request.json().catch(() => ({}))) as { items?: unknown }
+        const items = cleanSelection(body.items)
+        await env.SKINS.put(key, JSON.stringify(items))
+        return json({ items })
       }
     }
 

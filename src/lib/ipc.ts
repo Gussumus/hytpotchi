@@ -32,7 +32,7 @@ import type {
 } from './types'
 import { mockCall, mockListen } from './mock'
 import type { CustomBackground } from './appearance'
-import type { FriendInvite, FriendsState, FriendStatus, HytpotchiAuth } from './types'
+import type { CosmeticDef, FriendInvite, FriendsState, FriendStatus, HytpotchiAuth } from './types'
 
 /** Запущено внутри Tauri (а не в обычном браузере для предпросмотра) */
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -199,6 +199,9 @@ export const api = {
   capeSet: (accountId: string, capeId: string | null) => call<SkinProfile>('cape_set', { accountId, capeId }),
   hytpotchiCapeUpload: (accountId: string) => call<SkinProfile | null>('hytpotchi_cape_upload', { accountId }),
   hytpotchiCapeRemove: (accountId: string) => call<SkinProfile>('hytpotchi_cape_remove', { accountId }),
+  cosmeticsCatalog: () => call<{ version: number; items: CosmeticDef[] }>('cosmetics_catalog'),
+  cosmeticsGet: (accountId: string) => call<string[]>('cosmetics_get', { accountId }),
+  cosmeticsSet: (accountId: string, items: string[]) => call<string[]>('cosmetics_set', { accountId, items }),
   sharedSkinsGet: () => call<SharedSkins>('shared_skins_get'),
   sharedSkinsSet: (enabled: boolean, server: string | null) => call<SharedSkins>('shared_skins_set', { enabled, server }),
   skinPublish: (accountId: string) => call<SharedStatus>('skin_publish', { accountId }),

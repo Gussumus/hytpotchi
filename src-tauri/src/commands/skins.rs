@@ -233,6 +233,39 @@ pub async fn hytpotchi_cape_upload(
     Ok(Some(offline_profile(&account)))
 }
 
+/// Каталог косметики (для выбора и 3D-просмотра)
+#[command]
+pub async fn cosmetics_catalog(http: State<'_, HttpClient>) -> CmdResult<serde_json::Value> {
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    crate::engine::skins::cosmetics::catalog(&http, &server).await.map_err(err)
+}
+
+/// Что надето у аккаунта Hytpotchi
+#[command]
+pub async fn cosmetics_get(
+    http: State<'_, HttpClient>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+) -> CmdResult<Vec<String>> {
+    let account = offline_account(&store, &account_id).ok_or("Косметика — только для аккаунтов Hytpotchi")?;
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    crate::engine::skins::cosmetics::selection(&http, &server, &account.username).await.map_err(err)
+}
+
+/// Надеть набор косметики (можно несколько предметов сразу)
+#[command]
+pub async fn cosmetics_set(
+    http: State<'_, HttpClient>,
+    vault: State<'_, TokenVault>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+    items: Vec<String>,
+) -> CmdResult<Vec<String>> {
+    let account = offline_account(&store, &account_id).ok_or("Косметика — только для аккаунтов Hytpotchi")?;
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    crate::engine::skins::cosmetics::set_selection(&http, &vault, &server, &account, &items).await.map_err(err)
+}
+
 /// Снять свой плащ
 #[command]
 pub async fn hytpotchi_cape_remove(

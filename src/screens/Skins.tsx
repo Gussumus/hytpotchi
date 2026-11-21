@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { activeAccount, useStore } from '../store'
 import { api } from '../lib/ipc'
-import type { LibrarySkin, SharedStatus, SkinProfile } from '../lib/types'
+import type { CosmeticDef, LibrarySkin, SharedStatus, SkinProfile } from '../lib/types'
 import { SkinPreview } from '../components/SkinPreview'
 import { SkinViewer3D } from '../components/SkinViewer3D'
 import { EMOTES, type EmoteId } from '../lib/emotes'
@@ -23,6 +23,10 @@ export function Skins() {
   const [tryOn, setTryOn] = useState<LibrarySkin | null>(null)
   // Аккаунт Hytpotchi: скин из библиотеки публикуется на сервер Hytpotchi
   const isOffline = account?.kind === 'hytpotchi' || account?.kind === 'offline'
+  // Косметика (мод Hytpotchi Cosmetics): каталог и что надето
+  const [catalog, setCatalog] = useState<CosmeticDef[]>([])
+  const [worn, setWorn] = useState<string[]>([])
+  const [cosmeticsError, setCosmeticsError] = useState<string | null>(null)
   const backToIdle = useCallback(() => setEmote('idle'), [])
   const poke = useCallback(() => setEmote(POKES[Math.floor(Math.random() * POKES.length)]), [])
 
@@ -44,6 +48,31 @@ export function Skins() {
         .catch((e) => setProfileError((e as Error).message))
     }
   }, [account, loadLibrary])
+
+  useEffect(() => {
+    setWorn([])
+    setCosmeticsError(null)
+    if (!account || !isOffline) return
+    Promise.all([api.cosmeticsCatalog(), api.cosmeticsGet(account.id)])
+      .then(([cat, items]) => {
+        setCatalog(cat.items)
+        setWorn(items)
+      })
+      .catch((e) => setCosmeticsError((e as Error).message))
+  }, [account, isOffline])
+
+  async function toggleCosmetic(id: string) {
+    if (!account) return
+    const before = worn
+    const next = worn.includes(id) ? worn.filter((x) => x !== id) : [...worn, id]
+    setWorn(next) // сразу на модели, сервер — следом
+    try {
+      setWorn(await api.cosmeticsSet(account.id, next))
+    } catch (e) {
+      setWorn(before)
+      toast('error', (e as Error).message)
+    }
+  }
 
   async function run<T>(key: string, fn: () => Promise<T>, ok?: string) {
     setBusy(key)
@@ -91,6 +120,7 @@ export function Skins() {
                     src={tryOn?.image ?? profile.skin}
                     slim={(tryOn?.variant ?? profile.variant) === 'slim'}
                     cape={activeCape?.image}
+                    cosmetics={catalog.filter((c) => worn.includes(c.id))}
                     emote={emote}
                     onEmoteEnd={backToIdle}
                     onPoke={poke}
@@ -168,6 +198,32 @@ export function Skins() {
                     Сбросить
                   </button>
                 </div>
+                {isOffline && (catalog.length > 0 || cosmeticsError) && (
+                  <div className="cosmetics">
+                    <span className="muted small">
+                      Косметика — можно надеть несколько. Видна в сборках Fabric {'26.3'}: мод лаунчер ставит сам
+                    </span>
+                    {cosmeticsError && <span className="shared-status error">{cosmeticsError}</span>}
+                    <div className="cosmetic-grid">
+                      {catalog.map((c) => {
+                        const on = worn.includes(c.id)
+                        return (
+                          <button
+                            key={c.id}
+                            className={`cosmetic ${on ? 'on' : ''}`}
+                            aria-pressed={on}
+                            onClick={() => toggleCosmetic(c.id)}
+                            title={on ? 'Снять' : 'Надеть'}
+                          >
+                            <span className="cosmetic-name">{c.name}</span>
+                            <span className="cosmetic-price">{c.price > 0 ? `${c.price} ₽` : 'Бесплатно'}</span>
+                            {on && <IconCheck size={14} />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
                 {isOffline && (
                   <div className="capes">
                     <span className="muted small">Свой плащ — PNG 64×32 (или 128×64, 256×128, 512×256)</span>
