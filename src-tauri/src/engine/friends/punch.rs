@@ -132,11 +132,44 @@ async fn bind() -> Result<UdpSocket> {
     Ok(UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?)
 }
 
-/// Открыть свой NAT для собеседника: пара пакетов на его внешний адрес
+/// Открыть свой NAT для собеседника: пара пакетов на его внешний адрес (для тестов)
+#[cfg(test)]
 async fn knock(sock: &UdpSocket, peer: SocketAddr) {
     for _ in 0..3 {
         let _ = sock.send_to(PUNCH_PACKET, peer).await;
         tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+}
+
+/// Стучаться к собеседнику, пока соединение не установится. Роутеры двух сторон «открываются»
+/// в разное время (друг узнаёт адрес позже), и одной пачки пакетов в начале часто мало:
+/// первые пакеты чужой роутер отбрасывает. Пакеты идут с того же порта, что и QUIC
+/// (через копию сокета), поэтому держат открытым именно его.
+struct Knocker {
+    stop: Arc<std::sync::atomic::AtomicBool>,
+}
+
+const KNOCK_EVERY: Duration = Duration::from_millis(150);
+
+impl Knocker {
+    fn start(sock: &std::net::UdpSocket, peer: SocketAddr, for_: Duration) -> Result<Self> {
+        let copy = sock.try_clone()?;
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = stop.clone();
+        std::thread::Builder::new().name("hytpotchi-knock".into()).spawn(move || {
+            let end = std::time::Instant::now() + for_;
+            while !flag.load(std::sync::atomic::Ordering::Relaxed) && std::time::Instant::now() < end {
+                let _ = copy.send_to(PUNCH_PACKET, peer);
+                std::thread::sleep(KNOCK_EVERY);
+            }
+        })?;
+        Ok(Self { stop })
+    }
+}
+
+impl Drop for Knocker {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -159,7 +192,7 @@ fn sha256_hex(data: &[u8]) -> String {
 }
 
 /// QUIC-сервер хозяина на уже «пробитом» сокете. Возвращает endpoint и отпечаток сертификата.
-fn server_endpoint(sock: UdpSocket) -> Result<(quinn::Endpoint, String)> {
+fn server_endpoint(sock: std::net::UdpSocket) -> Result<(quinn::Endpoint, String)> {
     let generated = rcgen::generate_simple_self_signed(vec![SERVER_NAME.to_string()])?;
     let cert = generated.cert.der().clone();
     let fingerprint = sha256_hex(&cert);
@@ -174,7 +207,7 @@ fn server_endpoint(sock: UdpSocket) -> Result<(quinn::Endpoint, String)> {
     let endpoint = quinn::Endpoint::new(
         quinn::EndpointConfig::default(),
         Some(config),
-        sock.into_std()?,
+        sock,
         Arc::new(quinn::TokioRuntime),
     )?;
     Ok((endpoint, fingerprint))
@@ -226,7 +259,7 @@ impl ServerCertVerifier for PinnedCert {
     }
 }
 
-fn client_endpoint(sock: UdpSocket, fingerprint: &str) -> Result<quinn::Endpoint> {
+fn client_endpoint(sock: std::net::UdpSocket, fingerprint: &str) -> Result<quinn::Endpoint> {
     let provider = provider();
     let mut tls = rustls::ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])?
@@ -237,7 +270,7 @@ fn client_endpoint(sock: UdpSocket, fingerprint: &str) -> Result<quinn::Endpoint
     let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls)?));
     config.transport_config(transport());
     let mut endpoint =
-        quinn::Endpoint::new(quinn::EndpointConfig::default(), None, sock.into_std()?, Arc::new(quinn::TokioRuntime))?;
+        quinn::Endpoint::new(quinn::EndpointConfig::default(), None, sock, Arc::new(quinn::TokioRuntime))?;
     endpoint.set_default_client_config(config);
     Ok(endpoint)
 }
@@ -260,7 +293,7 @@ async fn pipe(tcp: TcpStream, mut send: quinn::SendStream, mut recv: quinn::Recv
 // ---------- Хозяин ----------
 
 /// Хозяин: принять одного гостя на «пробитом» сокете и пускать его потоки в мир на `port`
-async fn serve_guest(endpoint: quinn::Endpoint, guest: SocketAddrV4, key: String, port: u16) {
+async fn serve_guest(endpoint: quinn::Endpoint, guest: SocketAddrV4, key: String, port: u16, knocker: Option<Knocker>) {
     // Ждём первого удачного рукопожатия: случайный пакет или неудачная попытка не должны
     // занять место гостя
     let deadline = tokio::time::Instant::now() + ANSWER_WAIT + HANDSHAKE_TIMEOUT;
@@ -279,6 +312,7 @@ async fn serve_guest(endpoint: quinn::Endpoint, guest: SocketAddrV4, key: String
             Err(_) => {}
         }
     };
+    drop(knocker);
     log::info!("Прямое соединение: друг подключился напрямую ({})", conn.remote_address());
     let key = Arc::new(key.into_bytes());
     while let Ok((send, mut recv)) = conn.accept_bi().await {
@@ -304,7 +338,9 @@ async fn serve_guest(endpoint: quinn::Endpoint, guest: SocketAddrV4, key: String
 async fn answer(http: &HttpClient, token: &str, nonce: &str, guest: SocketAddrV4, key: String, port: u16) -> Result<()> {
     let sock = bind().await?;
     let mine = public_addr(&sock).await?;
-    knock(&sock, guest.into()).await;
+    log::info!("Прямое соединение: гость {guest}, мой адрес {mine} — стучусь к нему");
+    let sock = sock.into_std()?;
+    let knocker = Knocker::start(&sock, guest.into(), ANSWER_WAIT + HANDSHAKE_TIMEOUT)?;
     let (endpoint, fingerprint) = server_endpoint(sock)?;
     hytpotchi::post(
         http,
@@ -313,7 +349,7 @@ async fn answer(http: &HttpClient, token: &str, nonce: &str, guest: SocketAddrV4
         json!({ "nonce": nonce, "addr": mine.to_string(), "cert": fingerprint }),
     )
     .await?;
-    tokio::spawn(serve_guest(endpoint, guest, key, port));
+    tokio::spawn(serve_guest(endpoint, guest, key, port, Some(knocker)));
     Ok(())
 }
 
@@ -396,12 +432,14 @@ impl Session {
 
 /// Гость: подключиться к хозяину на пробитом сокете
 async fn connect(sock: UdpSocket, host: SocketAddrV4, fingerprint: &str, key: String) -> Result<Session> {
-    knock(&sock, host.into()).await;
+    let sock = sock.into_std()?;
+    let knocker = Knocker::start(&sock, host.into(), HANDSHAKE_TIMEOUT)?;
     let endpoint = client_endpoint(sock, fingerprint)?;
     let connecting = endpoint.connect(host.into(), SERVER_NAME)?;
     let conn = tokio::time::timeout(HANDSHAKE_TIMEOUT, connecting)
         .await
-        .context("друг не ответил напрямую")??;
+        .context("друг не ответил напрямую (его роутер или брандмауэр не пропустил пакеты)")??;
+    drop(knocker);
     Ok(Session { conn, key, _endpoint: endpoint })
 }
 
@@ -409,6 +447,7 @@ async fn connect(sock: UdpSocket, host: SocketAddrV4, fingerprint: &str, key: St
 pub async fn guest_session(http: &HttpClient, token: &str, friend_id: &str) -> Result<Session> {
     let sock = bind().await?;
     let mine = public_addr(&sock).await?;
+    log::info!("Прямое соединение: мой адрес {mine} (сокет {:?}) — прошу друга ответить", sock.local_addr());
     let reply = hytpotchi::post(
         http,
         "/api/friends/punch",
@@ -430,6 +469,7 @@ pub async fn guest_session(http: &HttpClient, token: &str, friend_id: &str) -> R
         }
     };
     let host = parse_peer(answer["addr"].as_str().unwrap_or_default())?;
+    log::info!("Прямое соединение: друг ответил, его адрес {host} — подключаюсь");
     let fingerprint = answer["cert"].as_str().context("Нет отпечатка сертификата")?;
     connect(sock, host, fingerprint, key).await
 }
@@ -480,8 +520,8 @@ mod tests {
             _ => unreachable!(),
         };
         knock(&host_sock, guest_addr.into()).await;
-        let (endpoint, fingerprint) = server_endpoint(host_sock).unwrap();
-        tokio::spawn(serve_guest(endpoint, guest_addr, key.clone(), port));
+        let (endpoint, fingerprint) = server_endpoint(host_sock.into_std().unwrap()).unwrap();
+        tokio::spawn(serve_guest(endpoint, guest_addr, key.clone(), port, None));
 
         // Чужой отпечаток — соединения нет
         let bad = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
@@ -540,9 +580,10 @@ mod tests {
             let _ = tokio::io::copy(&mut r, &mut w).await;
         });
         let key = "k".repeat(KEY_LEN);
-        knock(&host_sock, guest_pub.into()).await;
-        let (endpoint, fingerprint) = server_endpoint(host_sock).unwrap();
-        tokio::spawn(serve_guest(endpoint, guest_pub, key.clone(), port));
+        let host_std = host_sock.into_std().unwrap();
+        let knocker = Knocker::start(&host_std, guest_pub.into(), Duration::from_secs(20)).unwrap();
+        let (endpoint, fingerprint) = server_endpoint(host_std).unwrap();
+        tokio::spawn(serve_guest(endpoint, guest_pub, key.clone(), port, Some(knocker)));
         let t0 = std::time::Instant::now();
         match connect(guest_sock, host_pub, &fingerprint, key).await {
             Ok(session) => {
