@@ -67,6 +67,10 @@ fn local_ip_towards(gateway: SocketAddr) -> Result<IpAddr> {
 async fn map(port: u16) -> Result<Mapping> {
     let mut options = SearchOptions::default();
     options.timeout = Some(SEARCH_TIMEOUT);
+    // Ищем роутер через настоящую сетевую карту, а не через VPN-адаптер
+    if let Some(ip) = crate::engine::core::netif::lan_ipv4() {
+        options.bind_addr = SocketAddr::new(IpAddr::V4(ip), 0);
+    }
     let gateway = search_gateway(options).await.context("роутер с UPnP не найден")?;
     let external = match gateway.get_external_ip().await.context("роутер не сообщил внешний адрес")? {
         IpAddr::V4(ip) => ip,

@@ -14,6 +14,7 @@ pub mod ids;
 pub mod jobs;
 pub mod media;
 pub mod mirror;
+pub mod netif;
 pub mod pace;
 pub mod paths;
 pub mod prefs;

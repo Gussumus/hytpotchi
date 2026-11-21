@@ -121,7 +121,14 @@ fn parse_peer(addr: &str) -> Result<SocketAddrV4> {
     Ok(a)
 }
 
+/// UDP-сокет на настоящей сетевой карте: при включённом VPN (TUN) иначе внешним адресом
+/// оказался бы адрес VPN-сервера, а он пакеты от друга не пропускает
 async fn bind() -> Result<UdpSocket> {
+    if let Some(ip) = crate::engine::core::netif::lan_ipv4() {
+        if let Ok(sock) = UdpSocket::bind((ip, 0)).await {
+            return Ok(sock);
+        }
+    }
     Ok(UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?)
 }
 
@@ -557,5 +564,14 @@ mod tests {
             }
             Err(e) => println!("QUIC не установлен: {e:#} (роутер не поддерживает hairpin — между разными сетями это не мешает)"),
         }
+    }
+
+    /// Внешний адрес, который увидит друг (при включённом VPN должен быть домашним):
+    /// cargo test --lib stun_live -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn stun_live() {
+        let sock = bind().await.unwrap();
+        println!("Сокет: {:?}, внешний адрес: {:?}", sock.local_addr(), public_addr(&sock).await);
     }
 }

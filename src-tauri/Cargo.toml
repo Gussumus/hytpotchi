@@ -1,6 +1,6 @@
 [package]
 name = "hytpotchi"
-version = "0.4.1"
+version = "0.4.2"
 description = "Hytpotchi Minecraft Launcher"
 authors = ["Hytpotchi Team"]
 license = "GPL-3.0-only"
@@ -59,6 +59,9 @@ windows-sys = { version = "0.59", features = [
     "Win32_Security",
     "Win32_Security_Cryptography",
     "Win32_System_Registry",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
 ] }
 
 # FS & archives
