@@ -2,7 +2,8 @@
 //!
 //! - e4mc (мод, ставится лаунчером): «Domain assigned: <адрес>» — мир доступен из интернета.
 //!   Закрытие: «Local game no longer publicly hosted».
-//! - Обычное «Открыть для сети» без e4mc: «Started serving on <порт>» — только в одной сети.
+//! - Обычное «Открыть для сети» без e4mc: «Started serving on <порт>» (старые версии)
+//!   или «Published LAN server on port <порт>» (новые, 26.x) — только в одной сети.
 //! - Имя мира подсматриваем в «ServerLevel[<имя>]».
 
 use serde::Serialize;
@@ -51,9 +52,11 @@ pub fn parse_line(line: &str) -> Option<LogEvent> {
     if line.contains("Local game no longer publicly hosted") || line.contains("Stopping server") {
         return Some(LogEvent::Closed);
     }
-    if let Some(rest) = after(line, "Started serving on ") {
-        let port: String = rest.chars().take_while(char::is_ascii_digit).collect();
-        return port.parse().ok().map(LogEvent::LanPort);
+    for marker in ["Started serving on ", "Published LAN server on port "] {
+        if let Some(rest) = after(line, marker) {
+            let port: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            return port.parse().ok().map(LogEvent::LanPort);
+        }
     }
     if let Some(rest) = after(line, "ServerLevel[") {
         let name = rest.split(']').next()?.trim();
@@ -94,6 +97,11 @@ mod tests {
     #[test]
     fn lan_and_world() {
         assert_eq!(parse_line("[Server thread/INFO]: Started serving on 51234"), Some(LogEvent::LanPort(51234)));
+        // Minecraft 26.x, лог в формате log4j XML
+        assert_eq!(
+            parse_line("    <log4j:Message><![CDATA[Published LAN server on port 54141]]></log4j:Message>"),
+            Some(LogEvent::LanPort(54141))
+        );
         assert_eq!(
             parse_line("Saving chunks for level 'ServerLevel[Мой мир]'/minecraft:overworld"),
             Some(LogEvent::World("Мой мир".into()))
