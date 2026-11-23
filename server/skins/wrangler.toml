@@ -31,3 +31,8 @@ new_sqlite_classes = ["TunnelRelay"]
 #   npx wrangler secret put RELAY_KEY
 # [vars]
 # RELAY_URL = "ws://<IP VPS>:8443"
+
+# Файлы меш-косметики (3D-модели и текстуры): /cosmetics/<id>/… — готовит tools/cosmetics-import.
+# Отдаются как статика, мимо кода Worker'а.
+[assets]
+directory = "./assets"

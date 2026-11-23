@@ -1,0 +1,35 @@
+{
+  "id": "crown",
+  "source": "models/crown",
+  "credit": {
+    "title": "Minecraft Crown",
+    "author": "Olaf4549",
+    "url": "https://sketchfab.com/3d-models/88db58200f4d44798adb49a9b48a5579",
+    "license": "CC BY 4.0"
+  },
+  "bone": "head",
+  "fit": {
+    "axis": "x",
+    "size": 9.2
+  },
+  "anchor": [
+    0.5,
+    1,
+    0.5
+  ],
+  "at": [
+    0,
+    -6.9,
+    0
+  ],
+  "maxTriangles": 1500,
+  "textureSize": 128,
+  "crop": [
+    0,
+    0,
+    0,
+    1,
+    0.1,
+    1
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "horns",
+  "source": "models/horns",
+  "credit": { "title": "Horn Accessory", "author": "state_L", "url": "https://sketchfab.com/3d-models/4532c2f82f0d4760845c8fe4242e042c", "license": "CC BY 4.0" },
+  "bone": "head",
+  "fit": { "axis": "x", "size": 9 },
+  "anchor": [0.5, 1, 0.5],
+  "at": [0, -7.5, -0.5],
+  "maxTriangles": 1500,
+  "textureSize": 128
+}

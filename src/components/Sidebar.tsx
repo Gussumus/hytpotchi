@@ -2,7 +2,7 @@ import { activeAccount, useStore, type Screen } from '../store'
 import { loaderName } from '../lib/format'
 import { Avatar } from './Avatar'
 import { InstanceArt } from './InstanceArt'
-import { IconCompass, IconHome, IconPlus, IconSettings, IconShirt, IconUser, IconUsers } from './Icons'
+import { IconCompass, IconCrown, IconHome, IconPlus, IconSettings, IconShirt, IconUser, IconUsers } from './Icons'
 import type { Instance } from '../lib/types'
 
 const NAV: { id: Screen; label: string; icon: typeof IconHome }[] = [
@@ -10,6 +10,7 @@ const NAV: { id: Screen; label: string; icon: typeof IconHome }[] = [
   { id: 'content', label: 'Каталог', icon: IconCompass },
   { id: 'friends', label: 'Друзья', icon: IconUsers },
   { id: 'skins', label: 'Скины', icon: IconShirt },
+  { id: 'cosmetics', label: 'Косметика', icon: IconCrown },
   { id: 'accounts', label: 'Аккаунты', icon: IconUser },
   { id: 'settings', label: 'Настройки', icon: IconSettings },
 ]

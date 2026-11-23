@@ -70,6 +70,28 @@ export interface CosmeticPart {
   cubes: [number, number, number, number, number, number][]
 }
 
+/** Что надето и что куплено (платное надевается только купленным) */
+export interface CosmeticsState {
+  items: string[]
+  owned: string[]
+}
+
+/** Деталь-сетка (3D-модель): mesh — путь к mesh.json на сервере */
+export interface CosmeticMeshPart {
+  bone: CosmeticPart['bone']
+  pivot?: [number, number, number]
+  rot?: [number, number, number]
+  anim?: CosmeticPart['anim']
+  mesh: string
+}
+
+/** Файл 3D-модели: группы треугольников, у каждой своя текстура (−1 — без текстуры) */
+export interface CosmeticMesh {
+  format: number
+  textures: string[]
+  groups: { texture: number; v: number[]; i: number[] }[]
+}
+
 /** Предмет косметики из каталога сервера Hytpotchi */
 export interface CosmeticDef {
   id: string
@@ -77,7 +99,12 @@ export interface CosmeticDef {
   slot: string
   /** Цена в рублях, 0 — бесплатно */
   price: number
+  /** Модель из кубов (ей же пользуются старые версии мода) */
   parts: CosmeticPart[]
+  /** 3D-модель: если есть, рисуется вместо parts */
+  meshes?: CosmeticMeshPart[]
+  /** Автор модели (лицензии CC BY требуют его указать) */
+  credit?: { title?: string; author: string; url: string; license: string }
 }
 
 export interface SkinProfile {

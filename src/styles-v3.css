@@ -246,6 +246,15 @@
   font-size: 11px;
   color: var(--faint);
 }
+.cosmetic-credit {
+  font-size: 10px;
+  color: var(--faint);
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
 .skin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

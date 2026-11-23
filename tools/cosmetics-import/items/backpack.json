@@ -1,0 +1,11 @@
+{
+  "id": "backpack",
+  "source": "models/backpack",
+  "credit": { "title": "Hiking Backpack", "author": "Flok_", "url": "https://sketchfab.com/3d-models/a49cffb713294180ae9005309922e969", "license": "CC BY 4.0" },
+  "bone": "body",
+  "fit": { "axis": "y", "size": 8.5 },
+  "anchor": [0.5, 0.5, 0],
+  "at": [0, 5, 2.1],
+  "maxTriangles": 1500,
+  "textureSize": 128
+}

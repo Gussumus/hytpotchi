@@ -6,6 +6,7 @@ import './styles-v3.css'
 import './styles-motion.css'
 import './styles-appearance.css'
 import './styles-friends.css'
+import './styles-shop.css'
 import App from './App.tsx'
 import { applyAppearance, loadAppearance } from './lib/appearance'
 

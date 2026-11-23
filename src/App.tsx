@@ -14,6 +14,7 @@ import { Content } from './screens/Content'
 import { Accounts } from './screens/Accounts'
 import { Settings } from './screens/Settings'
 import { Skins } from './screens/Skins'
+import { Cosmetics } from './screens/Cosmetics'
 import { Friends } from './screens/Friends'
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
           {screen === 'content' && <Content />}
           {screen === 'friends' && <Friends />}
           {screen === 'skins' && <Skins />}
+          {screen === 'cosmetics' && <Cosmetics />}
           {screen === 'accounts' && <Accounts />}
           {screen === 'settings' && <Settings />}
         </main>

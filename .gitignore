@@ -29,3 +29,6 @@ dist-ssr
 src-tauri/tauri.release.json
 server/skins/.wrangler
 server/skins/.dev.vars
+
+# Исходные 3D-модели (скачанные со Sketchfab и т. п.) — у каждой своя лицензия, в репозиторий не кладём
+tools/cosmetics-import/models/

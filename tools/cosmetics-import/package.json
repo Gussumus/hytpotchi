@@ -1,0 +1,16 @@
+{
+  "name": "hytpotchi-cosmetics-import",
+  "private": true,
+  "type": "module",
+  "description": "Перевод 3D-моделей (.glb) в меш-косметику Hytpotchi",
+  "scripts": {
+    "import": "node import.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "meshoptimizer": "^1.3.0",
+    "sharp": "^0.35.5"
+  }
+}

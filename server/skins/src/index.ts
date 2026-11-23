@@ -25,6 +25,7 @@ export { FriendsHub } from './hub.ts'
 export { TunnelRelay } from './tunnel.ts'
 import { handleYggdrasil, rememberUuid, type YggHub } from './yggdrasil.ts'
 import { CATALOG, CATALOG_VERSION, cleanSelection } from './cosmetics.ts'
+import { ShopError, createPayment, handleNotification, owned, paymentRecord, returnPage, settle, shopEnabled } from './shop.ts'
 
 interface DONamespace {
   idFromName(name: string): unknown
@@ -39,6 +40,9 @@ export interface Env {
   TUNNEL?: DONamespace
   /** Ключ подписи текстур для authlib-injector (wrangler secret put YGG_PRIVATE_KEY) */
   YGG_PRIVATE_KEY?: string
+  /** Магазин ЮKassa (wrangler secret put …): без них платные предметы не продаются */
+  YOOKASSA_SHOP_ID?: string
+  YOOKASSA_SECRET_KEY?: string
 }
 
 interface Profile {
@@ -169,7 +173,7 @@ export default {
 
     if (request.method === 'GET' && path === '/') {
       return json(
-        { service: 'hytpotchi-skins', ok: true, friends: !!env.FRIENDS, accounts: !!env.FRIENDS, tunnel: !!env.TUNNEL },
+        { service: 'hytpotchi-skins', ok: true, friends: !!env.FRIENDS, accounts: !!env.FRIENDS, tunnel: !!env.TUNNEL, shop: shopEnabled(env) },
         200,
         'public, max-age=60',
       )
@@ -255,7 +259,7 @@ export default {
 
     // Косметика: каталог и что надето у игрока (менять — только владелец ника)
     if (path === '/api/cosmetics/catalog' && request.method === 'GET') {
-      return json({ version: CATALOG_VERSION, items: CATALOG }, 200, 'public, max-age=300')
+      return json({ version: CATALOG_VERSION, shop: shopEnabled(env), items: CATALOG }, 200, 'public, max-age=300')
     }
     const cosMatch = /^\/api\/cosmetics\/([^/]+)$/.exec(path)
     if (cosMatch) {
@@ -264,18 +268,52 @@ export default {
       const key = `cos:${name.toLowerCase()}`
       if (request.method === 'GET') {
         const raw = await env.SKINS.get(key)
-        return json({ items: cleanSelection(raw ? JSON.parse(raw) : []) }, 200, 'public, max-age=30')
+        const own = await owned(env, name)
+        return json({ items: cleanSelection(raw ? JSON.parse(raw) : [], own), owned: own }, 200, 'public, max-age=30')
       }
       if (request.method === 'PUT') {
         if ((await nickAccess(request, env, name)) !== 'owner') {
           return error('Косметику может менять только владелец ника — войдите в аккаунт Hytpotchi', 403)
         }
         const body = (await request.json().catch(() => ({}))) as { items?: unknown }
-        const items = cleanSelection(body.items)
+        const own = await owned(env, name)
+        const items = cleanSelection(body.items, own)
         await env.SKINS.put(key, JSON.stringify(items))
-        return json({ items })
+        return json({ items, owned: own })
       }
     }
+
+    // Магазин косметики (см. shop.ts)
+    if (path === '/api/shop/buy' && request.method === 'POST') {
+      const body = (await request.json().catch(() => ({}))) as { nick?: unknown; item?: unknown }
+      const nick = typeof body.nick === 'string' ? body.nick : ''
+      const item = typeof body.item === 'string' ? body.item : ''
+      if (!NAME_RE.test(nick)) return error('bad name', 400)
+      if ((await nickAccess(request, env, nick)) !== 'owner') {
+        return error('Покупать может только владелец ника — войдите в аккаунт Hytpotchi', 403)
+      }
+      try {
+        return json(await createPayment(env, nick, item, `${url.origin}/shop/return`))
+      } catch (e) {
+        if (e instanceof ShopError) return error(e.message, e.status)
+        throw e
+      }
+    }
+    const payMatch = /^\/api\/shop\/payment\/([^/]+)$/.exec(path)
+    if (payMatch && request.method === 'GET') {
+      const record = await paymentRecord(env, payMatch[1])
+      if (!record) return error('Платёж не найден', 404)
+      if ((await nickAccess(request, env, record.nick)) !== 'owner') return error('Это не ваш платёж', 403)
+      try {
+        const status = await settle(env, payMatch[1])
+        return json({ status, item: record.item, owned: await owned(env, record.nick) })
+      } catch (e) {
+        if (e instanceof ShopError) return error(e.message, e.status)
+        throw e
+      }
+    }
+    if (path === '/api/shop/yookassa' && request.method === 'POST') return handleNotification(env, request)
+    if (path === '/shop/return' && request.method === 'GET') return returnPage()
 
     // Плащ — только владелец аккаунта с этим ником
     const capeMatch = /^\/api\/capes\/([^/]+)$/.exec(path)

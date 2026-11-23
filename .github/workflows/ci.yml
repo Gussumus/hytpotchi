@@ -38,4 +38,5 @@ jobs:
           node --experimental-strip-types server/skins/test/tunnel.test.mjs
           node --experimental-strip-types server/skins/test/yggdrasil.test.mjs
           node --experimental-strip-types server/skins/test/cosmetics.test.mjs
+          node --experimental-strip-types server/skins/test/shop.test.mjs
           node --experimental-strip-types server/relay/test/relay.test.mjs

@@ -1,0 +1,11 @@
+{
+  "id": "top_hat",
+  "source": "models/top_hat",
+  "credit": { "title": "Voxel top hat", "author": "Rovani", "url": "https://sketchfab.com/3d-models/ea9a1d9276584ebda27f3db37fe9c52e", "license": "CC BY 4.0" },
+  "bone": "head",
+  "fit": { "axis": "x", "size": 11 },
+  "anchor": [0.5, 1, 0.5],
+  "at": [0, -8.3, 0],
+  "maxTriangles": 1500,
+  "textureSize": 128
+}

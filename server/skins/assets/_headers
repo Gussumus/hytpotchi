@@ -1,0 +1,4 @@
+# Файлы меш-косметики (tools/cosmetics-import): кэш на сутки, доступ из лаунчера
+/cosmetics/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=86400

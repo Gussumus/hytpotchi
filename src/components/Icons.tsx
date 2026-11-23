@@ -26,6 +26,7 @@ import {
   Server,
   Settings,
   Shirt,
+  Crown,
   SlidersHorizontal,
   Square,
   SquareTerminal,
@@ -89,6 +90,7 @@ export const IconUpload = icon(Upload)
 export const IconAlert = icon(TriangleAlert)
 export const IconArrowRight = icon(ArrowRight)
 export const IconShirt = icon(Shirt)
+export const IconCrown = icon(Crown)
 export const IconServer = icon(Server)
 export const IconRefresh = icon(RefreshCw)
 export const IconUsers = icon(Users)

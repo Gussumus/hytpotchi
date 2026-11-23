@@ -68,6 +68,34 @@ Durable Object `TunnelRelay` ([src/tunnel.ts](src/tunnel.ts)) — по одно�
 (`/api/friends/join`, только для друзей, билет живёт 5 минут); на каждое соединение игры хозяин
 открывает `data`, и байты Minecraft идут насквозь. Секрет хозяина и билеты хранятся хешами.
 
+## Косметика и магазин
+
+Каталог — [src/cosmetics.ts](src/cosmetics.ts) и [src/cosmetics-extra.ts](src/cosmetics-extra.ts)
+(модели из кубов), 3D-модели — [src/cosmetics-meshes.ts](src/cosmetics-meshes.ts) и файлы в
+`assets/cosmetics/` (их готовит `tools/cosmetics-import`, отдаются как статика — см. `[assets]`
+в `wrangler.toml`). У предмета есть цена: `0` — бесплатно, иначе он продаётся навсегда на аккаунт.
+Надеть можно только бесплатное или купленное — сервер сам снимает остальное.
+
+Оплата — ЮKassa ([src/shop.ts](src/shop.ts)). Подключение:
+
+1. Зарегистрируйте магазин в ЮKassa (для самозанятых и ИП). В разделе «Интеграция → Ключи API»
+   возьмите `shopId` и секретный ключ (для проверки — тестовый магазин, деньги не списываются).
+2. Положите их в секреты Worker'а (в репозиторий — никогда):
+   ```bash
+   npx wrangler secret put YOOKASSA_SHOP_ID
+   npx wrangler secret put YOOKASSA_SECRET_KEY
+   ```
+3. В ЮKassa, «Интеграция → HTTP-уведомления»: адрес `https://<ваш сервер>/api/shop/yookassa`,
+   события `payment.succeeded` и `payment.canceled`.
+4. `npx wrangler deploy`. В лаунчере кнопка «Купить» заработает сама (каталог сообщает `shop: true`).
+
+Уведомлениям сервер не верит: по id платежа сам спрашивает ЮKassa и выдаёт предмет, только если
+платёж оплачен, сумма равна цене, а ник и предмет — те, что он сам записал при создании. Если
+уведомление потерялось, лаунчер, ожидая оплату, спрашивает `/api/shop/payment/<id>`, и сервер
+перепроверяет платёж тем же способом. Чеки: самозанятым ЮKassa отправляет доходы в «Мой налог»
+сама; если у вас онлайн-касса по 54-ФЗ, в запрос платежа нужно добавить `receipt` (сейчас не
+отправляется).
+
 ## Тесты
 
 Тесты запускаются локально, без Cloudflare и без установки пакетов (Node 22.6+):
@@ -76,4 +104,6 @@ Durable Object `TunnelRelay` ([src/tunnel.ts](src/tunnel.ts)) — по одно�
 node --experimental-strip-types server/skins/test/worker.test.mjs
 node --experimental-strip-types server/skins/test/hub.test.mjs
 node --experimental-strip-types server/skins/test/tunnel.test.mjs
+node --experimental-strip-types server/skins/test/cosmetics.test.mjs
+node --experimental-strip-types server/skins/test/shop.test.mjs
 ```

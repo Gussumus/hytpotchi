@@ -1,0 +1,12 @@
+{
+  "id": "cat_ears",
+  "name": "Лисьи ушки",
+  "source": "models/cat_ears",
+  "credit": { "title": "Accessory Fox Ears", "author": "state_L", "url": "https://sketchfab.com/3d-models/82f5a2d637cd462795ca33168f2fe1b0", "license": "CC BY 4.0" },
+  "bone": "head",
+  "fit": { "axis": "x", "size": 9 },
+  "anchor": [0.5, 1, 0.5],
+  "at": [0, -8, 0],
+  "maxTriangles": 1500,
+  "textureSize": 128
+}

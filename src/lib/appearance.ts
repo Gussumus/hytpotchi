@@ -45,6 +45,7 @@ export const SCREEN_LABELS: Record<Screen, string> = {
   content: 'Каталог',
   friends: 'Друзья',
   skins: 'Скины',
+  cosmetics: 'Косметика',
   accounts: 'Аккаунты',
   settings: 'Настройки',
 }

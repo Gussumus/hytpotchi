@@ -233,7 +233,15 @@ function pickBrowserFile(accept: string): Promise<File | null> {
   })
 }
 
-let demoCosmetics: string[] = ['angel_wings', 'halo']
+let demoCosmetics: string[] = ['top_hat']
+// Демо-магазин: «оплата» проходит на второй проверке статуса
+let demoOwned: string[] = []
+const demoPayments = new Map<string, { item: string; checks: number }>()
+const demoPrice = (id: string) => cosmeticsDemo.items.find((c) => c.id === id)?.price ?? 0
+const demoState = () => ({
+  items: demoCosmetics.filter((id) => demoPrice(id) === 0 || demoOwned.includes(id)),
+  owned: demoOwned,
+})
 
 export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
   await sleep(120)
@@ -419,12 +427,31 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
     case 'instance_clear_cover':
       return r(instances.find((i) => i.id === args.id) ?? null)
     case 'cosmetics_catalog':
-      return r(cosmeticsDemo)
+      return r({ ...cosmeticsDemo, shop: true })
+    case 'cosmetics_mesh': {
+      // Демо: файлы моделей берём прямо из server/skins/assets (их отдаёт dev-сервер Vite)
+      const path = String(args.path)
+      const base = `/server/skins/assets/${path.slice(0, path.lastIndexOf('/'))}`
+      const mesh = await fetch(`/server/skins/assets/${path}`).then((x) => x.json())
+      return r({ mesh, textures: (mesh.textures as string[]).map((t) => `${base}/${t}`) })
+    }
     case 'cosmetics_get':
-      return r(demoCosmetics)
+      return r(demoState())
     case 'cosmetics_set':
       demoCosmetics = ((args.items as string[]) ?? []).slice(0, 10)
-      return r(demoCosmetics)
+      return r(demoState())
+    case 'shop_buy': {
+      const id = `demo-${Date.now().toString(16)}`
+      demoPayments.set(id, { item: String(args.item), checks: 0 })
+      return r({ paymentId: id, url: 'https://yookassa.ru/' })
+    }
+    case 'shop_payment': {
+      const p = demoPayments.get(String(args.paymentId))
+      if (!p) throw new Error('Платёж не найден')
+      p.checks++
+      if (p.checks >= 2 && !demoOwned.includes(p.item)) demoOwned = [...demoOwned, p.item]
+      return r({ status: p.checks >= 2 ? 'succeeded' : 'pending', item: p.item, owned: demoOwned })
+    }
     case 'hytpotchi_cape_upload':
     case 'hytpotchi_cape_remove':
     case 'skin_profile':

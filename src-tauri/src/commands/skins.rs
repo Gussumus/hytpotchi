@@ -13,6 +13,7 @@ use crate::engine::accounts::vault::{TokenVault, game_session};
 use crate::engine::core::http::HttpClient;
 use crate::engine::core::paths::app_dir;
 use crate::engine::core::settings::{self, LauncherSettings};
+use crate::engine::skins::cosmetics::CosmeticsState;
 use crate::engine::skins::shared;
 
 const PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
@@ -240,13 +241,20 @@ pub async fn cosmetics_catalog(http: State<'_, HttpClient>) -> CmdResult<serde_j
     crate::engine::skins::cosmetics::catalog(&http, &server).await.map_err(err)
 }
 
-/// Что надето у аккаунта Hytpotchi
+/// 3D-модель предмета косметики с текстурами (путь — из поля mesh в каталоге)
+#[command]
+pub async fn cosmetics_mesh(http: State<'_, HttpClient>, path: String) -> CmdResult<serde_json::Value> {
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    crate::engine::skins::cosmetics::mesh(&http, &server, &path).await.map_err(err)
+}
+
+/// Что надето у аккаунта Hytpotchi и что он купил
 #[command]
 pub async fn cosmetics_get(
     http: State<'_, HttpClient>,
     store: State<'_, AccountStore>,
     account_id: String,
-) -> CmdResult<Vec<String>> {
+) -> CmdResult<CosmeticsState> {
     let account = offline_account(&store, &account_id).ok_or("Косметика — только для аккаунтов Hytpotchi")?;
     let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
     crate::engine::skins::cosmetics::selection(&http, &server, &account.username).await.map_err(err)
@@ -260,10 +268,44 @@ pub async fn cosmetics_set(
     store: State<'_, AccountStore>,
     account_id: String,
     items: Vec<String>,
-) -> CmdResult<Vec<String>> {
+) -> CmdResult<CosmeticsState> {
     let account = offline_account(&store, &account_id).ok_or("Косметика — только для аккаунтов Hytpotchi")?;
     let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
     crate::engine::skins::cosmetics::set_selection(&http, &vault, &server, &account, &items).await.map_err(err)
+}
+
+/// Купить предмет косметики: создаёт платёж и открывает страницу оплаты ЮKassa в браузере.
+/// Возвращает {paymentId, url} — дальше интерфейс спрашивает статус через shop_payment.
+#[command]
+pub async fn shop_buy(
+    app: tauri::AppHandle,
+    http: State<'_, HttpClient>,
+    vault: State<'_, TokenVault>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+    item: String,
+) -> CmdResult<serde_json::Value> {
+    use tauri_plugin_opener::OpenerExt;
+    let account = offline_account(&store, &account_id).ok_or("Покупки — только для аккаунтов Hytpotchi")?;
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    let v = crate::engine::skins::cosmetics::buy(&http, &vault, &server, &account, &item).await.map_err(err)?;
+    let url = v["url"].as_str().unwrap_or_default().to_string();
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())?;
+    Ok(v)
+}
+
+/// Статус платежа за косметику: pending | succeeded | canceled, и что теперь куплено
+#[command]
+pub async fn shop_payment(
+    http: State<'_, HttpClient>,
+    vault: State<'_, TokenVault>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+    payment_id: String,
+) -> CmdResult<serde_json::Value> {
+    let account = offline_account(&store, &account_id).ok_or("Покупки — только для аккаунтов Hytpotchi")?;
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    crate::engine::skins::cosmetics::payment(&http, &vault, &server, &account, &payment_id).await.map_err(err)
 }
 
 /// Снять свой плащ

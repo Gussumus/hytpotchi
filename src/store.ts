@@ -20,7 +20,7 @@ import {
   type CustomBackground,
 } from './lib/appearance'
 
-export type Screen = 'home' | 'instance' | 'content' | 'friends' | 'skins' | 'accounts' | 'settings'
+export type Screen = 'home' | 'instance' | 'content' | 'friends' | 'skins' | 'cosmetics' | 'accounts' | 'settings'
 
 export type Modal =
   | { type: 'create' }

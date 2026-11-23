@@ -5,7 +5,7 @@ import type { CosmeticDef, LibrarySkin, SharedStatus, SkinProfile } from '../lib
 import { SkinPreview } from '../components/SkinPreview'
 import { SkinViewer3D } from '../components/SkinViewer3D'
 import { EMOTES, type EmoteId } from '../lib/emotes'
-import { IconCheck, IconPlus, IconShirt, IconTrash, IconUpload } from '../components/Icons'
+import { IconCheck, IconCrown, IconPlus, IconShirt, IconTrash, IconUpload } from '../components/Icons'
 
 const POKES: EmoteId[] = ['wave', 'yes', 'clap', 'bow', 'cheer']
 
@@ -54,25 +54,12 @@ export function Skins() {
     setCosmeticsError(null)
     if (!account || !isOffline) return
     Promise.all([api.cosmeticsCatalog(), api.cosmeticsGet(account.id)])
-      .then(([cat, items]) => {
+      .then(([cat, state]) => {
         setCatalog(cat.items)
-        setWorn(items)
+        setWorn(state.items)
       })
       .catch((e) => setCosmeticsError((e as Error).message))
   }, [account, isOffline])
-
-  async function toggleCosmetic(id: string) {
-    if (!account) return
-    const before = worn
-    const next = worn.includes(id) ? worn.filter((x) => x !== id) : [...worn, id]
-    setWorn(next) // сразу на модели, сервер — следом
-    try {
-      setWorn(await api.cosmeticsSet(account.id, next))
-    } catch (e) {
-      setWorn(before)
-      toast('error', (e as Error).message)
-    }
-  }
 
   async function run<T>(key: string, fn: () => Promise<T>, ok?: string) {
     setBusy(key)
@@ -198,30 +185,15 @@ export function Skins() {
                     Сбросить
                   </button>
                 </div>
-                {isOffline && (catalog.length > 0 || cosmeticsError) && (
+                {isOffline && (
                   <div className="cosmetics">
                     <span className="muted small">
-                      Косметика — можно надеть несколько. Видна в сборках Fabric {'26.3'}: мод лаунчер ставит сам
+                      {worn.length > 0 ? `Надето косметики: ${worn.length}` : 'Шапки, крылья, хвосты — во вкладке «Косметика»'}
                     </span>
                     {cosmeticsError && <span className="shared-status error">{cosmeticsError}</span>}
-                    <div className="cosmetic-grid">
-                      {catalog.map((c) => {
-                        const on = worn.includes(c.id)
-                        return (
-                          <button
-                            key={c.id}
-                            className={`cosmetic ${on ? 'on' : ''}`}
-                            aria-pressed={on}
-                            onClick={() => toggleCosmetic(c.id)}
-                            title={on ? 'Снять' : 'Надеть'}
-                          >
-                            <span className="cosmetic-name">{c.name}</span>
-                            <span className="cosmetic-price">{c.price > 0 ? `${c.price} ₽` : 'Бесплатно'}</span>
-                            {on && <IconCheck size={14} />}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <button className="btn ghost sm" onClick={() => setScreen('cosmetics')}>
+                      <IconCrown size={14} /> Открыть косметику
+                    </button>
                   </div>
                 )}
                 {isOffline && (

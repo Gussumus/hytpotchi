@@ -6,6 +6,7 @@
 //! умеет рисовать на игроке только скин и плащ.
 
 use anyhow::{Result, bail};
+use base64::Engine as _;
 use serde_json::{Value, json};
 
 use crate::engine::accounts::hytpotchi;
@@ -69,41 +70,136 @@ pub async fn catalog(http: &HttpClient, server: &str) -> Result<Value> {
     get_json(http, &format!("{server}/api/cosmetics/catalog")).await
 }
 
-/// Что надето у игрока
-pub async fn selection(http: &HttpClient, server: &str, nick: &str) -> Result<Vec<String>> {
-    let v = get_json(http, &format!("{server}/api/cosmetics/{}", urlencoding::encode(nick))).await?;
-    Ok(items(&v))
+/// Путь к 3D-модели из каталога: cosmetics/<id>/<файл>.json — ничего, кроме файлов косметики
+fn valid_mesh_path(path: &str) -> bool {
+    let parts: Vec<&str> = path.split('/').collect();
+    let id_ok = |s: &str| !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b == b'_');
+    let file_ok = |s: &str| {
+        s.strip_suffix(".json")
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-'))
+    };
+    parts.len() == 3 && parts[0] == "cosmetics" && id_ok(parts[1]) && file_ok(parts[2])
 }
 
-/// Надеть набор косметики (только владелец аккаунта)
-pub async fn set_selection(
+/// Имя текстуры внутри mesh.json: tex<N>.png
+fn valid_texture_name(name: &str) -> bool {
+    name.strip_prefix("tex")
+        .and_then(|n| n.strip_suffix(".png"))
+        .is_some_and(|n| !n.is_empty() && n.len() <= 3 && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Самая большая текстура модели, которую примем
+const MAX_TEXTURE: usize = 4 * 1024 * 1024;
+
+/// 3D-модель предмета (mesh.json) и её текстуры как data:-URL — для 3D-просмотра в лаунчере
+/// (интерфейсу нельзя ходить к серверу напрямую)
+pub async fn mesh(http: &HttpClient, server: &str, path: &str) -> Result<Value> {
+    if !valid_mesh_path(path) {
+        bail!("Неверный путь к модели");
+    }
+    let mesh = get_json(http, &format!("{server}/{path}")).await?;
+    let dir = path.rsplit_once('/').map(|(d, _)| d).unwrap_or_default();
+    let mut textures = Vec::new();
+    for name in mesh["textures"].as_array().into_iter().flatten() {
+        let name = name.as_str().unwrap_or_default();
+        if !valid_texture_name(name) {
+            bail!("Неверное имя текстуры в модели");
+        }
+        let resp = http
+            .oneshot
+            .get(format!("{server}/{dir}/{name}"))
+            .send()
+            .await
+            .map_err(|_| anyhow::anyhow!("Сервер Hytpotchi недоступен"))?;
+        if !resp.status().is_success() {
+            return Err(hytpotchi::server_error(resp).await);
+        }
+        let bytes = resp.bytes().await?;
+        if bytes.len() > MAX_TEXTURE || !bytes.starts_with(b"\x89PNG") {
+            bail!("Текстура модели повреждена");
+        }
+        textures.push(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes)));
+    }
+    Ok(json!({ "mesh": mesh, "textures": textures }))
+}
+
+/// Что надето у игрока и что он купил
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CosmeticsState {
+    pub items: Vec<String>,
+    pub owned: Vec<String>,
+}
+
+fn state(v: &Value) -> CosmeticsState {
+    CosmeticsState { items: strings(&v["items"]), owned: strings(&v["owned"]) }
+}
+
+/// Что надето у игрока и что куплено
+pub async fn selection(http: &HttpClient, server: &str, nick: &str) -> Result<CosmeticsState> {
+    let v = get_json(http, &format!("{server}/api/cosmetics/{}", urlencoding::encode(nick))).await?;
+    Ok(state(&v))
+}
+
+/// Запрос к серверу от имени аккаунта Hytpotchi (с его токеном)
+async fn authed(
     http: &HttpClient,
     vault: &SecretsVault,
-    server: &str,
     account: &Account,
-    chosen: &[String],
-) -> Result<Vec<String>> {
-    if chosen.len() > 10 {
-        bail!("Можно надеть не больше 10 предметов");
-    }
+    req: impl FnOnce(&reqwest::Client) -> reqwest::RequestBuilder,
+) -> Result<Value> {
     let token = hytpotchi::token(vault, account).await?;
-    let resp = http
-        .oneshot
-        .put(format!("{server}/api/cosmetics/{}", urlencoding::encode(&account.username)))
+    let resp = req(&http.oneshot)
         .bearer_auth(token)
-        .json(&json!({ "items": chosen }))
         .send()
         .await
         .map_err(|_| anyhow::anyhow!("Сервер Hytpotchi недоступен"))?;
     if !resp.status().is_success() {
         return Err(hytpotchi::server_error(resp).await);
     }
-    Ok(items(&resp.json().await?))
+    Ok(resp.json().await?)
 }
 
-fn items(v: &Value) -> Vec<String> {
-    v["items"]
-        .as_array()
+/// Надеть набор косметики (только владелец аккаунта; платное — только купленное)
+pub async fn set_selection(
+    http: &HttpClient,
+    vault: &SecretsVault,
+    server: &str,
+    account: &Account,
+    chosen: &[String],
+) -> Result<CosmeticsState> {
+    if chosen.len() > 10 {
+        bail!("Можно надеть не больше 10 предметов");
+    }
+    let url = format!("{server}/api/cosmetics/{}", urlencoding::encode(&account.username));
+    let v = authed(http, vault, account, |c| c.put(url).json(&json!({ "items": chosen }))).await?;
+    Ok(state(&v))
+}
+
+/// Начать покупку предмета: сервер создаёт платёж ЮKassa и отдаёт страницу оплаты
+pub async fn buy(http: &HttpClient, vault: &SecretsVault, server: &str, account: &Account, item: &str) -> Result<Value> {
+    if item.is_empty() || item.len() > 32 || !item.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
+        bail!("Такого предмета нет");
+    }
+    let body = json!({ "nick": account.username, "item": item });
+    let v = authed(http, vault, account, |c| c.post(format!("{server}/api/shop/buy")).json(&body)).await?;
+    let url = v["url"].as_str().unwrap_or_default();
+    // Открываем в браузере только настоящую страницу оплаты
+    if !url.starts_with("https://") {
+        bail!("Платёжный сервис вернул неверную ссылку");
+    }
+    Ok(v)
+}
+
+/// Статус платежа (сервер заодно перепроверяет его у ЮKassa) и что теперь куплено
+pub async fn payment(http: &HttpClient, vault: &SecretsVault, server: &str, account: &Account, id: &str) -> Result<Value> {
+    if id.is_empty() || id.len() > 64 || !id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-') {
+        bail!("Неверный номер платежа");
+    }
+    authed(http, vault, account, |c| c.get(format!("{server}/api/shop/payment/{id}"))).await
+}
+
+fn strings(v: &Value) -> Vec<String> {
+    v.as_array()
         .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
         .unwrap_or_default()
 }
@@ -120,6 +216,28 @@ mod tests {
         assert!(text.contains("fabric.mod.json"));
         assert!(text.contains("ru/hytpotchi/cosmetics/CosmeticsClient"));
         assert_eq!(jvm_arg("https://srv/"), "-Dhytpotchi.server=https://srv");
-        assert_eq!(items(&json!({"items": ["crown", 5, "halo"]})), vec!["crown", "halo"]);
+        let s = state(&json!({"items": ["crown", 5, "halo"], "owned": ["crown"]}));
+        assert_eq!(s.items, vec!["crown", "halo"]);
+        assert_eq!(s.owned, vec!["crown"]);
+        assert!(state(&json!({"items": []})).owned.is_empty(), "старый сервер без owned");
+    }
+
+    #[test]
+    fn mesh_paths_stay_inside_cosmetics() {
+        assert!(valid_mesh_path("cosmetics/jester_hat/mesh.json"));
+        assert!(valid_mesh_path("cosmetics/bat_wings/mesh-left.json"));
+        for bad in [
+            "cosmetics/../secrets.json",
+            "api/cosmetics/catalog",
+            "cosmetics/x/mesh.png",
+            "cosmetics/x/y/mesh.json",
+            "cosmetics//mesh.json",
+            "https://evil/cosmetics/x/mesh.json",
+            "cosmetics/X/mesh.json",
+        ] {
+            assert!(!valid_mesh_path(bad), "{bad}");
+        }
+        assert!(valid_texture_name("tex0.png") && valid_texture_name("tex12.png"));
+        assert!(!valid_texture_name("../tex0.png") && !valid_texture_name("tex.png") && !valid_texture_name("tex0.jpg"));
     }
 }
