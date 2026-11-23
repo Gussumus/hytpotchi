@@ -4,6 +4,7 @@ import { api, openExternal } from '../lib/ipc'
 import type { CosmeticDef, SkinProfile } from '../lib/types'
 import { SkinViewer3D } from '../components/SkinViewer3D'
 import { IconCheck, IconCrown, IconExternal, IconRefresh } from '../components/Icons'
+import { CosmeticsAdmin } from '../components/CosmeticsAdmin'
 
 /** Фильтры витрины: по месту на персонаже и «моё» */
 const FILTERS = [
@@ -15,7 +16,7 @@ const FILTERS = [
   { id: 'tail', label: 'Хвосты' },
   { id: 'mine', label: 'Моё' },
 ] as const
-type Filter = (typeof FILTERS)[number]['id']
+type Filter = (typeof FILTERS)[number]['id'] | 'admin'
 
 /** Сколько ждать оплату, опрашивая сервер (страница ЮKassa живёт около 10 минут) */
 const PAY_WAIT_MS = 15 * 60_000
@@ -44,26 +45,65 @@ export function Cosmetics() {
   /** Платёж, который ждём: id и предмет */
   const [paying, setPaying] = useState<{ id: string; item: string; url: string; since: number } | null>(null)
   const [busy, setBusy] = useState(false)
+  /** Вкладка «Админ» — только если сервер признал аккаунт админом (ADMIN_NICKS) */
+  const [isAdmin, setIsAdmin] = useState(false)
 
+  // Надетое: что хотим (уже на экране) и что последним подтвердил сервер.
+  // Запросы на сервер идут строго по одному — иначе ответ старого запроса мог прийти последним
+  // и вернуть снятую вещь (и на экране, и на сервере).
+  const wornRef = useRef<string[]>([])
+  const confirmedRef = useRef<string[]>([])
+  const syncingRef = useRef(false)
+  const setWornBoth = (items: string[]) => {
+    wornRef.current = items
+    setWorn(items)
+  }
+
+  const accountId = account && isHytpotchi ? account.id : null
   useEffect(() => {
-    setWorn([])
+    setWornBoth([])
+    confirmedRef.current = []
     setOwned([])
     setError(null)
     setPaying(null)
-    if (!account || !isHytpotchi) return
-    api.skinProfile(account.id).then(setProfile).catch(() => setProfile(null))
-    Promise.all([api.cosmeticsCatalog(), api.cosmeticsGet(account.id)])
+    setIsAdmin(false)
+    setFilter((f) => (f === 'admin' ? 'all' : f))
+    if (!accountId) return
+    let alive = true
+    api
+      .cosmeticsAdmin(accountId)
+      .then((r) => alive && setIsAdmin(!!r.admin))
+      .catch(() => alive && setIsAdmin(false))
+    api
+      .skinProfile(accountId)
+      .then((p) => alive && setProfile(p))
+      .catch(() => alive && setProfile(null))
+    Promise.all([api.cosmeticsCatalog(), api.cosmeticsGet(accountId)])
       .then(([cat, state]) => {
+        if (!alive) return
         setCatalog(cat.items)
         setShopOpen(!!cat.shop)
-        setWorn(state.items)
+        confirmedRef.current = state.items
+        // Пока грузились, игрок уже что-то надел/снял — его выбор важнее
+        if (!syncingRef.current) setWornBoth(state.items)
         setOwned(state.owned ?? [])
       })
-      .catch((e) => setError((e as Error).message))
-  }, [account, isHytpotchi])
+      .catch((e) => alive && setError((e as Error).message))
+    return () => {
+      alive = false
+    }
+  }, [accountId])
 
   const has = useCallback((c: CosmeticDef) => c.price === 0 || owned.includes(c.id), [owned])
   const current = catalog.find((c) => c.id === selected) ?? null
+  /** Спорят ли два предмета за одно место на теле */
+  const clashes = useCallback(
+    (a: string, b: string) => {
+      const sa = catalog.find((c) => c.id === a)?.spot
+      return !!sa && a !== b && sa === catalog.find((c) => c.id === b)?.spot
+    },
+    [catalog],
+  )
 
   const shown = useMemo(
     () =>
@@ -73,30 +113,56 @@ export function Cosmetics() {
     [catalog, filter, owned, worn],
   )
 
-  // На модели — надетое и примеряемое (выбранное, даже если не куплено)
+  // На модели — надетое и примерка (выбранное, но ещё не купленное). Своё на модели — только если надето,
+  // иначе «Снять» у выбранной вещи ничего не меняло на экране.
   const onModel = useMemo(() => {
     const ids = new Set(worn)
-    if (current) ids.add(current.id)
+    if (current && !has(current)) {
+      // Примерка — как будто надели: то, что на том же месте, на время убираем
+      for (const id of worn) if (clashes(current.id, id)) ids.delete(id)
+      ids.add(current.id)
+    }
     return catalog.filter((c) => ids.has(c.id))
-  }, [catalog, worn, current])
+  }, [catalog, worn, current, has, clashes])
 
-  async function wear(id: string, on: boolean) {
-    if (!account) return
-    const before = worn
-    const next = on ? [...worn.filter((x) => x !== id), id] : worn.filter((x) => x !== id)
+  /** Отправить на сервер последний выбор; пока запрос идёт, новые клики копятся и уйдут следующим */
+  async function sync() {
+    if (!accountId || syncingRef.current) return
+    syncingRef.current = true
+    try {
+      for (;;) {
+        const want = wornRef.current
+        let state
+        try {
+          state = await api.cosmeticsSet(accountId, want)
+        } catch (e) {
+          setWornBoth(confirmedRef.current)
+          toast('error', (e as Error).message)
+          return
+        }
+        confirmedRef.current = state.items
+        setOwned((prev) => state.owned ?? prev)
+        if (wornRef.current === want) {
+          setWornBoth(state.items)
+          return
+        }
+      }
+    } finally {
+      syncingRef.current = false
+    }
+  }
+
+  function wear(id: string, on: boolean) {
+    const cur = wornRef.current
+    // Новый предмет снимает то, что занимает то же место (шляпа — шляпу, хвост — хвост)
+    const kept = on ? cur.filter((x) => x !== id && !clashes(id, x)) : cur.filter((x) => x !== id)
+    const next = on ? [...kept, id] : kept
     if (next.length > 10) {
       toast('error', 'Можно надеть не больше 10 предметов')
       return
     }
-    setWorn(next) // сразу на модели, сервер — следом
-    try {
-      const state = await api.cosmeticsSet(account.id, next)
-      setWorn(state.items)
-      setOwned(state.owned ?? owned)
-    } catch (e) {
-      setWorn(before)
-      toast('error', (e as Error).message)
-    }
+    setWornBoth(next) // сразу на модели, сервер — следом
+    void sync()
   }
 
   async function buy(c: CosmeticDef) {
@@ -126,7 +192,7 @@ export function Cosmetics() {
         setPaying(null)
         const name = catalog.find((c) => c.id === p.item)?.name ?? 'Предмет'
         toast('success', `${name} — теперь ваш навсегда`)
-        void wear(p.item, true)
+        wear(p.item, true)
       } else if (r.status === 'canceled') {
         setPaying(null)
         toast('error', 'Оплата отменена')
@@ -166,6 +232,8 @@ export function Cosmetics() {
 
   const owns = current ? has(current) : false
   const wearing = current ? worn.includes(current.id) : false
+  /** Что снимется, если надеть выбранное */
+  const replaces = current ? catalog.filter((c) => worn.includes(c.id) && clashes(current.id, c.id)) : []
 
   return (
     <div className="screen">
@@ -186,7 +254,7 @@ export function Cosmetics() {
               nameTag={account.username}
               height={420}
             />
-            {current && !wearing && <span className="try-on-badge">Примерка: {current.name}</span>}
+            {current && !has(current) && <span className="try-on-badge">Примерка: {current.name}</span>}
             <span className="skin3d-hint">Тяните, чтобы повернуть</span>
           </div>
 
@@ -225,6 +293,9 @@ export function Cosmetics() {
                 </button>
               )}
               {!owns && <span className="muted small">Покупка — навсегда, на аккаунт {account.username}</span>}
+              {!wearing && replaces.length > 0 && (
+                <span className="muted small">Вместо: {replaces.map((c) => c.name).join(', ')} — на одном месте</span>
+              )}
               {current.credit && (
                 <span className="muted small shop-credit">
                   3D-модель «{current.credit.title ?? current.name}» — {current.credit.author}, {current.credit.license}
@@ -249,7 +320,21 @@ export function Cosmetics() {
                 {f.label}
               </button>
             ))}
+            {isAdmin && (
+              <button
+                role="tab"
+                aria-selected={filter === 'admin'}
+                className={`chip ${filter === 'admin' ? 'on' : ''}`}
+                onClick={() => setFilter('admin')}
+              >
+                Админ
+              </button>
+            )}
           </div>
+          {filter === 'admin' && isAdmin ? (
+            <CosmeticsAdmin accountId={account.id} catalog={catalog} />
+          ) : (
+          <>
           {error && <div className="shared-status error">{error}</div>}
           {!error && shown.length === 0 && (
             <p className="muted small">{filter === 'mine' ? 'Тут появится купленное и надетое' : 'Пусто'}</p>
@@ -284,6 +369,8 @@ export function Cosmetics() {
               )
             })}
           </div>
+          </>
+          )}
         </section>
       </div>
     </div>

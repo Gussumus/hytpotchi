@@ -161,6 +161,7 @@ pub fn run() {
             commands::skins::cosmetics_mesh,
             commands::skins::shop_buy,
             commands::skins::shop_payment,
+            commands::skins::cosmetics_admin,
             commands::skins::cosmetics_get,
             commands::skins::cosmetics_set,
             commands::skins::shared_skins_get,

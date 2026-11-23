@@ -237,6 +237,7 @@ let demoCosmetics: string[] = ['top_hat']
 // Демо-магазин: «оплата» проходит на второй проверке статуса
 let demoOwned: string[] = []
 const demoPayments = new Map<string, { item: string; checks: number }>()
+const demoAdminOwned = new Map<string, string[]>()
 const demoPrice = (id: string) => cosmeticsDemo.items.find((c) => c.id === id)?.price ?? 0
 const demoState = () => ({
   items: demoCosmetics.filter((id) => demoPrice(id) === 0 || demoOwned.includes(id)),
@@ -444,6 +445,17 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
       const id = `demo-${Date.now().toString(16)}`
       demoPayments.set(id, { item: String(args.item), checks: 0 })
       return r({ paymentId: id, url: 'https://yookassa.ru/' })
+    }
+    case 'cosmetics_admin': {
+      // В демо вы — админ, «игроки» хранятся в памяти
+      const nick = args.nick as string | null
+      if (!nick) return r({ admin: true })
+      const key = nick.toLowerCase()
+      const list = new Set(demoAdminOwned.get(key) ?? [])
+      for (const id of (args.grant as string[]) ?? []) list.add(id)
+      for (const id of (args.revoke as string[]) ?? []) list.delete(id)
+      demoAdminOwned.set(key, [...list])
+      return r({ nick, owned: [...list] })
     }
     case 'shop_payment': {
       const p = demoPayments.get(String(args.paymentId))

@@ -148,3 +148,8 @@
     position: static;
   }
 }
+
+/* Админка косметики */
+.admin-panel { display: flex; flex-direction: column; gap: 12px; }
+.admin-panel form input { flex: 1; min-width: 0; }
+.admin-head { align-items: center; gap: 8px; flex-wrap: wrap; }

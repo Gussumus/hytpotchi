@@ -68,6 +68,11 @@ export async function owned(env: ShopEnv, nick: string): Promise<string[]> {
   return raw ? (JSON.parse(raw) as string[]) : []
 }
 
+/** Заменить список купленного целиком (админка) */
+export async function setOwned(env: ShopEnv, nick: string, list: string[]): Promise<void> {
+  await env.SKINS.put(`own:${nick.toLowerCase()}`, JSON.stringify(list))
+}
+
 async function grant(env: ShopEnv, nick: string, item: string): Promise<string[]> {
   const list = await owned(env, nick)
   if (!list.includes(item)) {

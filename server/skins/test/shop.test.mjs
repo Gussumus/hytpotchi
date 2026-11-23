@@ -80,7 +80,7 @@ globalThis.fetch = async (input, init = {}) => {
 }
 
 const paid = CATALOG.find((c) => c.price > 0)
-const free = CATALOG.find((c) => c.price === 0)
+const free = CATALOG.find((c) => c.price === 0 && c.spot !== paid.spot)
 assert.ok(paid && free)
 const price = paid.price.toFixed(2)
 
@@ -156,6 +156,24 @@ assert.equal((await call('POST', '/api/shop/yookassa', { body: 'мусор' })).
 r = await call('GET', '/shop/return')
 assert.equal(r.status, 200)
 assert.match(await r.text(), /Косметика/)
+
+// Админка: без ADMIN_NICKS и не-админу — 403; админ выдаёт и забирает
+const admin = await register('Boss')
+assert.equal((await call('POST', '/api/admin/cosmetics', { token: admin, body: {} })).status, 403)
+const aenv = { ...env, ADMIN_NICKS: 'someone, boss' }
+const acall = (body, token = admin) => call('POST', '/api/admin/cosmetics', { token, body, e: aenv })
+assert.equal((await acall({}, thief)).status, 403)
+assert.equal((await acall({})).status, 200)
+assert.deepEqual(await (await acall({})).json(), { admin: true })
+assert.equal((await acall({ nick: 'Steve', grant: ['нет_такого'] })).status, 400)
+assert.equal((await acall({ nick: 'плохой ник' })).status, 400)
+const another = CATALOG.filter((c) => c.price > 0 && c.id !== paid.id)[1]
+let a = await (await acall({ nick: 'Steve', grant: [another.id, paid.id] })).json()
+assert.deepEqual(a.owned, [paid.id, another.id])
+a = await (await acall({ nick: 'steve', revoke: [paid.id] })).json()
+assert.deepEqual(a.owned, [another.id])
+assert.deepEqual((await (await acall({ nick: 'Steve' })).json()).owned, [another.id])
+assert.deepEqual((await (await call('GET', '/api/cosmetics/Steve')).json()).owned, [another.id])
 
 globalThis.fetch = realFetch
 console.log('shop: все проверки пройдены')

@@ -63,6 +63,8 @@ export interface CosmeticDef {
   name: string
   /** head | face | back | tail | float — подсказка для интерфейса */
   slot: string
+  /** Место на теле: два предмета с одним местом не надеть вместе (новый снимает старый). Нет — ни с чем не спорит */
+  spot?: string
   /** Цена в рублях; 0 — бесплатно. Купленный предмет — навсегда (см. shop.ts) */
   price: number
   parts: CosmeticPart[]
@@ -498,21 +500,50 @@ function withMeshes(items: CosmeticDef[], meshItems: MeshItem[]): CosmeticDef[] 
   return out
 }
 
-export const CATALOG: CosmeticDef[] = withMeshes([...CUBE_ITEMS, ...EXTRA_ITEMS], MESH_ITEMS)
+/**
+ * Что с чем не надеть: предметы, которые физически лезут друг в друга. Шляпа со шляпой — нельзя,
+ * тучка с хвостом — можно. Новый предмет без записи здесь: спина, хвост и «над головой» спорят
+ * со своим слотом, голова и лицо — ни с чем.
+ */
+const SPOTS: Record<string, string> = {
+  top_hat: 'hat', crown: 'hat', jester_hat: 'hat', cowboy_hat: 'hat', beanie: 'hat', cap: 'hat',
+  wizard_hat: 'hat', viking_helmet: 'hat', santa_hat: 'hat', flower_crown: 'hat',
+  cat_ears: 'ears', horns: 'ears', headphones: 'ears',
+  sunglasses: 'eyes', pixel_glasses: 'eyes',
+  mustache: 'mouth',
+  halo: 'above', rain_cloud: 'above',
+  angel_wings: 'back', demon_wings: 'back', butterfly_wings: 'back', backpack: 'back',
+  back_sword: 'back', quiver: 'back', guitar: 'back',
+  fox_tail: 'tail', cat_tail: 'tail', dragon_tail: 'tail',
+}
+const SLOT_SPOT: Record<string, string> = { back: 'back', tail: 'tail', float: 'above' }
+
+export const CATALOG: CosmeticDef[] = withMeshes([...CUBE_ITEMS, ...EXTRA_ITEMS], MESH_ITEMS).map((c) => {
+  const spot = SPOTS[c.id] ?? SLOT_SPOT[c.slot]
+  return spot ? { ...c, spot } : c
+})
+const SPOT = new Map(CATALOG.map((c) => [c.id, c.spot]))
 
 const IDS = new Set(CATALOG.map((c) => c.id))
 const PRICE = new Map(CATALOG.map((c) => [c.id, c.price]))
 const MAX_ITEMS = 10
 
-/** Оставить только существующие предметы, без повторов */
+/**
+ * Оставить только существующие предметы, без повторов и без двух предметов на одном месте
+ * (из спорящих побеждает последний в списке — его надели позже)
+ */
 export function cleanSelection(raw: unknown, owned: string[] = []): string[] {
   if (!Array.isArray(raw)) return []
   const out: string[] = []
-  for (const id of raw) {
+  const spots = new Set<string>()
+  for (const id of [...raw].reverse()) {
     // Надеть можно бесплатное или купленное
     const mine = typeof id === 'string' && IDS.has(id) && (PRICE.get(id) === 0 || owned.includes(id))
-    if (mine && !out.includes(id)) out.push(id)
-    if (out.length >= MAX_ITEMS) break
+    if (!mine || out.includes(id)) continue
+    const spot = SPOT.get(id)
+    if (spot && spots.has(spot)) continue
+    if (spot) spots.add(spot)
+    out.push(id)
   }
-  return out
+  return out.reverse().slice(-MAX_ITEMS)
 }

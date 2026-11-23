@@ -207,6 +207,9 @@ export const api = {
   shopBuy: (accountId: string, item: string) => call<{ paymentId: string; url: string }>('shop_buy', { accountId, item }),
   shopPayment: (accountId: string, paymentId: string) =>
     call<{ status: 'pending' | 'succeeded' | 'canceled' | null; item: string; owned: string[] }>('shop_payment', { accountId, paymentId }),
+  /** Админка косметики: без nick — проверка доступа (ошибка, если не админ) */
+  cosmeticsAdmin: (accountId: string, nick?: string, grant: string[] = [], revoke: string[] = []) =>
+    call<{ admin?: boolean; nick?: string; owned?: string[] }>('cosmetics_admin', { accountId, nick: nick ?? null, grant, revoke }),
   sharedSkinsGet: () => call<SharedSkins>('shared_skins_get'),
   sharedSkinsSet: (enabled: boolean, server: string | null) => call<SharedSkins>('shared_skins_set', { enabled, server }),
   skinPublish: (accountId: string) => call<SharedStatus>('skin_publish', { accountId }),

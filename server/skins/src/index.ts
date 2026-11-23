@@ -25,7 +25,7 @@ export { FriendsHub } from './hub.ts'
 export { TunnelRelay } from './tunnel.ts'
 import { handleYggdrasil, rememberUuid, type YggHub } from './yggdrasil.ts'
 import { CATALOG, CATALOG_VERSION, cleanSelection } from './cosmetics.ts'
-import { ShopError, createPayment, handleNotification, owned, paymentRecord, returnPage, settle, shopEnabled } from './shop.ts'
+import { ShopError, createPayment, handleNotification, owned, paymentRecord, returnPage, setOwned, settle, shopEnabled } from './shop.ts'
 
 interface DONamespace {
   idFromName(name: string): unknown
@@ -43,6 +43,8 @@ export interface Env {
   /** Магазин ЮKassa (wrangler secret put …): без них платные предметы не продаются */
   YOOKASSA_SHOP_ID?: string
   YOOKASSA_SECRET_KEY?: string
+  /** Ники админов через запятую (wrangler secret put ADMIN_NICKS): выдача косметики из лаунчера */
+  ADMIN_NICKS?: string
 }
 
 interface Profile {
@@ -124,6 +126,28 @@ function yggHub(env: Env): YggHub {
 }
 
 /** Кто может менять скин ника: владелец аккаунта, никто (ник занят) или старый ключ (ник свободен) */
+/** Ник аккаунта Hytpotchi, чей токен в запросе, — или null */
+async function accountNick(request: Request, env: Env): Promise<string | null> {
+  if (!env.FRIENDS) return null
+  const who = await hubOf(env).fetch(
+    new Request('https://hub/internal/whoami', {
+      method: 'POST',
+      headers: { authorization: request.headers.get('authorization') ?? '' },
+    }),
+  )
+  if (!who.ok) return null
+  const { user } = (await who.json()) as { user: { nick: string } }
+  return user.nick
+}
+
+/** Админ ли владелец токена (ADMIN_NICKS) */
+async function isAdmin(request: Request, env: Env): Promise<boolean> {
+  const admins = (env.ADMIN_NICKS ?? '').split(',').map((n) => n.trim().toLowerCase()).filter(Boolean)
+  if (!admins.length) return false
+  const nick = await accountNick(request, env)
+  return !!nick && admins.includes(nick.toLowerCase())
+}
+
 async function nickAccess(request: Request, env: Env, nick: string): Promise<'owner' | 'taken' | 'free'> {
   if (!env.FRIENDS) return 'free'
   const hub = hubOf(env)
@@ -281,6 +305,28 @@ export default {
         await env.SKINS.put(key, JSON.stringify(items))
         return json({ items, owned: own })
       }
+    }
+
+    // Админка: выдать / забрать косметику у любого игрока.
+    //   POST /api/admin/cosmetics {}                                   → {admin: true}  (проверка доступа)
+    //   POST /api/admin/cosmetics {nick, grant?: [id], revoke?: [id]}  → {nick, owned}
+    if (path === '/api/admin/cosmetics' && request.method === 'POST') {
+      if (!(await isAdmin(request, env))) return error('Нет доступа', 403)
+      const body = (await request.json().catch(() => ({}))) as { nick?: unknown; grant?: unknown; revoke?: unknown }
+      if (body.nick === undefined) return json({ admin: true })
+      const nick = typeof body.nick === 'string' ? body.nick.trim() : ''
+      if (!NAME_RE.test(nick)) return error('Ник: 3–16 символов, латиница, цифры и _', 400)
+      const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+      const grant = ids(body.grant)
+      const revoke = ids(body.revoke)
+      const unknown = [...grant, ...revoke].filter((id) => !CATALOG.some((c) => c.id === id))
+      if (unknown.length) return error(`Нет такого предмета: ${unknown.join(', ')}`, 400)
+      let list = await owned(env, nick)
+      if (grant.length || revoke.length) {
+        list = [...new Set([...list, ...grant])].filter((id) => !revoke.includes(id))
+        await setOwned(env, nick, list)
+      }
+      return json({ nick, owned: list })
     }
 
     // Магазин косметики (см. shop.ts)

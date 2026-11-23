@@ -198,6 +198,30 @@ pub async fn payment(http: &HttpClient, vault: &SecretsVault, server: &str, acco
     authed(http, vault, account, |c| c.get(format!("{server}/api/shop/payment/{id}"))).await
 }
 
+/// Админка: без ника — проверка доступа ({admin: true} или ошибка «Нет доступа»),
+/// с ником — выдать / забрать предметы и вернуть {nick, owned}
+pub async fn admin(
+    http: &HttpClient,
+    vault: &SecretsVault,
+    server: &str,
+    account: &Account,
+    nick: Option<&str>,
+    grant: &[String],
+    revoke: &[String],
+) -> Result<Value> {
+    let body = match nick {
+        None => json!({}),
+        Some(n) => {
+            let n = n.trim();
+            if !(3..=16).contains(&n.len()) || !n.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+                bail!("Ник: 3–16 символов, латиница, цифры и _");
+            }
+            json!({ "nick": n, "grant": grant, "revoke": revoke })
+        }
+    };
+    authed(http, vault, account, |c| c.post(format!("{server}/api/admin/cosmetics")).json(&body)).await
+}
+
 fn strings(v: &Value) -> Vec<String> {
     v.as_array()
         .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())

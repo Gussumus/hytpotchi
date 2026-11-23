@@ -308,6 +308,32 @@ pub async fn shop_payment(
     crate::engine::skins::cosmetics::payment(&http, &vault, &server, &account, &payment_id).await.map_err(err)
 }
 
+/// Админка косметики: без nick — есть ли доступ; с nick — выдать (grant) / забрать (revoke)
+#[command]
+pub async fn cosmetics_admin(
+    http: State<'_, HttpClient>,
+    vault: State<'_, TokenVault>,
+    store: State<'_, AccountStore>,
+    account_id: String,
+    nick: Option<String>,
+    grant: Option<Vec<String>>,
+    revoke: Option<Vec<String>>,
+) -> CmdResult<serde_json::Value> {
+    let account = offline_account(&store, &account_id).ok_or("Админка — только для аккаунтов Hytpotchi")?;
+    let server = settings::skin_server().ok_or("Нет сервера Hytpotchi")?;
+    crate::engine::skins::cosmetics::admin(
+        &http,
+        &vault,
+        &server,
+        &account,
+        nick.as_deref(),
+        &grant.unwrap_or_default(),
+        &revoke.unwrap_or_default(),
+    )
+    .await
+    .map_err(err)
+}
+
 /// Снять свой плащ
 #[command]
 pub async fn hytpotchi_cape_remove(
