@@ -1,6 +1,6 @@
 [package]
 name = "hytpotchi"
-version = "1.0.1"
+version = "1.5.0"
 description = "Hytpotchi Minecraft Launcher"
 authors = ["Hytpotchi Team"]
 license = "GPL-3.0-only"
