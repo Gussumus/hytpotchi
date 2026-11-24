@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="${forge}"
+license="GPL-3.0-only"
+
+[[mods]]
+modId="hytpotchi_cosmetics"
+version="${version}"
+displayName="Hytpotchi Cosmetics"
+authors="Hytpotchi"
+description='''Косметика игроков Hytpotchi: шапки, крылья и другое. Ставится лаунчером Hytpotchi.'''
+# Мод только для клиента: серверу он не нужен, и сервер без него не «краснеет» в списке серверов
+displayTest="IGNORE_ALL_VERSION"
+
+[[dependencies.hytpotchi_cosmetics]]
+modId="forge"
+mandatory=true
+versionRange="${forge}"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.hytpotchi_cosmetics]]
+modId="minecraft"
+mandatory=true
+versionRange="${minecraft}"
+ordering="NONE"
+side="CLIENT"

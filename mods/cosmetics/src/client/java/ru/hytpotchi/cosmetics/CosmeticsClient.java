@@ -24,6 +24,34 @@ public final class CosmeticsClient implements ClientModInitializer {
 			}
 		});
 		registerTestScreenshot();
+		registerViewerScreenshot();
+	}
+
+	/**
+	 * -Dhytpotchi.cosmetics.viewshot=<секунд>: через столько секунд в мире снять от первого лица,
+	 * без интерфейса — так этот игрок видит других (screenshots/cosmetics_view.png). Для проверки
+	 * косметики чужих игроков: тест лаунчера ставит двух игроков на сервере друг напротив друга.
+	 */
+	private static void registerViewerScreenshot() {
+		String raw = System.getProperty("hytpotchi.cosmetics.viewshot");
+		if (raw == null) {
+			return;
+		}
+		int at = Integer.parseInt(raw.trim()) * 20;
+		int[] t = {0};
+		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+			if (mc.player == null || mc.level == null || t[0] < 0) {
+				return;
+			}
+			t[0]++;
+			if (t[0] == at - 10 && !mc.gui.hud.isHidden()) {
+				mc.gui.hud.toggle();
+			}
+			if (t[0] == at) {
+				shot(mc, "cosmetics_view.png");
+				t[0] = -1;
+			}
+		});
 	}
 
 	/**

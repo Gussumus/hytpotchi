@@ -215,6 +215,9 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
             }
         }
         let authlib = !auth_jvm.is_empty();
+        if !authlib && session.user_type == "legacy" {
+            auth_jvm.extend(crate::engine::game::pipeline::plan::offline_api_args());
+        }
         let own_skin = if account.kind == AccountKind::Hytpotchi {
             account
                 .offline_skin
@@ -253,7 +256,7 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
         }
     }
 
-    // Косметика Hytpotchi (шапки, крылья…): свой мод в сборках Fabric подходящей версии
+    // Косметика Hytpotchi (шапки, крылья…): свой мод в сборках Fabric, Quilt и Forge подходящей версии
     {
         let settings = crate::engine::core::settings::load();
         let server = settings
@@ -267,11 +270,19 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
                     if new {
                         console("Установлен мод Hytpotchi Cosmetics — видна косметика игроков Hytpotchi".into());
                     }
-                    auth_jvm.push(crate::engine::skins::cosmetics::jvm_arg(server));
+                    auth_jvm.extend(crate::engine::skins::cosmetics::jvm_args(server));
                 }
                 Err(e) => console(format!("Косметика не подключена: {e:#}")),
             },
-            _ => crate::engine::skins::cosmetics::remove(&instance),
+            Some(_) => {
+                crate::engine::skins::cosmetics::remove(&instance);
+                // Иначе игрок не поймёт, почему не видит шапки и крылья друзей
+                console(format!(
+                    "Косметику игроков Hytpotchi в этой сборке не видно: мод косметики есть для {}",
+                    crate::engine::skins::cosmetics::SUPPORTED_VERSIONS
+                ));
+            }
+            None => crate::engine::skins::cosmetics::remove(&instance),
         }
     }
 

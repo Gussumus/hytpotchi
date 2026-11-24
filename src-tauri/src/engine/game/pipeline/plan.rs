@@ -29,6 +29,20 @@ impl std::fmt::Debug for GameAccount {
     }
 }
 
+/// Аргументы JVM для офлайн-сессии (токен "0", без authlib-injector).
+///
+/// Minecraft 1.16.4–1.16.5 спрашивает у Mojang, можно ли аккаунту в мультиплеер. На токен "0"
+/// нынешний API отвечает в формате, который старая игра не распознаёт как ошибку, — и считает,
+/// что нельзя: кнопка «Сетевая игра» серая, к миру друга и по --server не подключиться.
+/// Несуществующие адреса (.invalid не резолвится никогда) — запрос сразу падает, игра переходит
+/// в офлайн-режим, где всё разрешено. Нужны все четыре: иначе authlib их игнорирует.
+pub fn offline_api_args() -> Vec<String> {
+    ["auth", "account", "session", "services"]
+        .iter()
+        .map(|kind| format!("-Dminecraft.api.{kind}.host=https://nope.invalid"))
+        .collect()
+}
+
 /// Параметры запуска
 pub struct LaunchContext<'a> {
     pub manifest: &'a VersionManifest,
@@ -228,6 +242,16 @@ mod tests {
         vars.insert("auth_player_name", "Steve".to_string());
         assert_eq!(substitute("--username=${auth_player_name}", &vars), "--username=Steve");
         assert_eq!(substitute("plain", &vars), "plain");
+    }
+
+    #[test]
+    fn offline_api_sets_all_four_hosts() {
+        // authlib игнорирует адреса, если задан не каждый из четырёх
+        let args = offline_api_args();
+        for kind in ["auth", "account", "session", "services"] {
+            assert!(args.iter().any(|a| a.starts_with(&format!("-Dminecraft.api.{kind}.host=https://"))), "{kind}");
+        }
+        assert!(args.iter().all(|a| a.ends_with(".invalid")));
     }
 
     #[test]

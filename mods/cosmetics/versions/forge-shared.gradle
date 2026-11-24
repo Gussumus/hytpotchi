@@ -1,0 +1,62 @@
+// Общая сборка мода под Forge (versions/forge-<версия>/build.gradle подключает этот файл).
+// Architectury Loom: имена Mojang в исходниках, при сборке jar переводится в имена Forge (SRG).
+// Свой код версии — versions/forge-<версия>/src, общий (сеть, каталог, геометрия) — common/java.
+version = project.mod_version
+group = 'ru.hytpotchi'
+
+base {
+	archivesName = "hytpotchi-cosmetics-forge-mc${project.minecraft_version}"
+}
+
+repositories {
+	maven { url = 'https://maven.minecraftforge.net/' }
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
+	forge "net.minecraftforge:forge:${project.forge_version}"
+}
+
+sourceSets {
+	main {
+		java.srcDir '../../common/java'
+		resources.srcDir '../forge-template'
+		resources.srcDir '../../src/client/resources'
+	}
+}
+
+// pack.mcmeta обязателен: без него Forge при каждом запуске показывает экран «Warning while
+// loading mods … failed to load a valid ResourcePackInfo» и ждёт кнопку (у мода есть текстура)
+processResources {
+	def props = [version: project.mod_version, minecraft: project.mod_minecraft, forge: project.forge_range,
+		pack_format: project.pack_format]
+	inputs.properties props
+	filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+		expand props
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = project.java_release as int
+	it.options.encoding = 'UTF-8'
+}
+
+// Проверка в игре: gradlew runClient — заходит ником gussumus (на нём надета косметика),
+// сам создаёт мир (TestShot), снимает игрока спереди и сзади в run/screenshots и закрывает игру.
+loom {
+	runs {
+		client {
+			vmArg '-Dhytpotchi.server=https://hytpotchi-skins.akiom31.workers.dev'
+			vmArg '-Dhytpotchi.cosmetics.screenshot=10'
+			programArgs '--username', 'gussumus'
+		}
+	}
+}
+
+// Сама сборка идёт на Java 25+ (требование Loom), а игра в runClient — на Java своей версии
+tasks.withType(JavaExec).configureEach {
+	javaLauncher = javaToolchains.launcherFor {
+		languageVersion = JavaLanguageVersion.of((project.findProperty('run_java') ?: project.java_release) as int)
+	}
+}

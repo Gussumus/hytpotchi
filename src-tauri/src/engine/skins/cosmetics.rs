@@ -1,7 +1,8 @@
 //! Косметика игроков Hytpotchi (шапки, крылья, хвосты…): мод Hytpotchi Cosmetics + выбор на сервере.
 //!
 //! Мод (исходники — mods/cosmetics) вшит в лаунчер — отдельной сборкой под каждую поддержанную
-//! версию игры (1.16.5, 1.18.2, 1.19.2, 1.20.1, 1.21.1, 1.21.4, 26.3) — и ставится в сборки Fabric. Он берёт каталог моделей и что надето у каждого игрока с сервера Hytpotchi
+//! версию игры (Fabric и Quilt: 1.16.5, 1.18.2, 1.19.2, 1.20.1, 1.21.1, 1.21.4, 26.3; Forge: 1.20.1).
+//! Он берёт каталог моделей и что надето у каждого игрока с сервера Hytpotchi
 //! (адрес передаётся через -Dhytpotchi.server). Без мода косметику не видно: ванильный клиент
 //! умеет рисовать на игроке только скин и плащ.
 
@@ -16,61 +17,86 @@ use crate::engine::core::paths::instance_mods_dir;
 use crate::engine::profiles::store::Instance;
 use crate::secrets::SecretsVault;
 
-/// Сборка мода под версии игры. Fabric не запустит игру с модом не той версии
-/// (`depends.minecraft` в fabric.mod.json), поэтому versions — ровно то, что там разрешено.
+/// Сборка мода под загрузчик и версии игры. Загрузчик не запустит игру с модом не той версии
+/// (`depends.minecraft` в fabric.mod.json, `versionRange` в mods.toml), поэтому versions — ровно
+/// то, что там разрешено.
 struct ModBuild {
+    loaders: &'static [&'static str],
     versions: &'static [&'static str],
     jar: &'static [u8],
 }
 
+/// Quilt запускает моды Fabric (и Fabric API) как свои
+const FABRIC: &[&str] = &["fabric", "quilt"];
+const FORGE: &[&str] = &["forge"];
+
 /// Собранные моды (mods/cosmetics: README — как собрать и куда положить)
 const BUILDS: &[ModBuild] = &[
-    ModBuild { versions: &["26.3"], jar: include_bytes!("../../../resources/hytpotchi-cosmetics.jar") },
+    ModBuild { loaders: FABRIC, versions: &["26.3"], jar: include_bytes!("../../../resources/hytpotchi-cosmetics.jar") },
     ModBuild {
+        loaders: FABRIC,
         versions: &["1.21.4"],
         jar: include_bytes!("../../../resources/cosmetics/hytpotchi-cosmetics-mc1.21.4.jar"),
     },
     ModBuild {
+        loaders: FABRIC,
         versions: &["1.21", "1.21.1"],
         jar: include_bytes!("../../../resources/cosmetics/hytpotchi-cosmetics-mc1.21.1.jar"),
     },
     ModBuild {
+        loaders: FABRIC,
         versions: &["1.20", "1.20.1"],
         jar: include_bytes!("../../../resources/cosmetics/hytpotchi-cosmetics-mc1.20.1.jar"),
     },
     ModBuild {
+        loaders: FABRIC,
         versions: &["1.19.2"],
         jar: include_bytes!("../../../resources/cosmetics/hytpotchi-cosmetics-mc1.19.2.jar"),
     },
     ModBuild {
+        loaders: FABRIC,
         versions: &["1.18.2"],
         jar: include_bytes!("../../../resources/cosmetics/hytpotchi-cosmetics-mc1.18.2.jar"),
     },
     ModBuild {
+        loaders: FABRIC,
         versions: &["1.16.5"],
         jar: include_bytes!("../../../resources/cosmetics/hytpotchi-cosmetics-mc1.16.5.jar"),
     },
+    ModBuild {
+        loaders: FORGE,
+        versions: &["1.20", "1.20.1"],
+        jar: include_bytes!("../../../resources/cosmetics/hytpotchi-cosmetics-forge-mc1.20.1.jar"),
+    },
 ];
+/// Для сообщений игроку: под какие загрузчики и версии есть мод
+pub const SUPPORTED_VERSIONS: &str = "Fabric и Quilt на 1.16.5, 1.18.2, 1.19.2, 1.20.1, 1.21.1, 1.21.4 и 26.3, Forge на 1.20.1";
 /// Имя файла мода в папке mods сборки
 pub const MOD_FILE: &str = "hytpotchi-cosmetics.jar";
 const FABRIC_API: &str = "fabric-api";
 
-fn build_for(game_version: &str) -> Option<&'static ModBuild> {
-    BUILDS.iter().find(|b| b.versions.contains(&game_version))
+fn build_for(loader: Option<&str>, game_version: &str) -> Option<&'static ModBuild> {
+    let loader = loader?;
+    BUILDS.iter().find(|b| b.loaders.contains(&loader) && b.versions.contains(&game_version))
 }
 
 /// Можно ли поставить мод в эту сборку
 pub fn supported(instance: &Instance) -> bool {
-    instance.loader.as_deref() == Some("fabric") && build_for(&instance.game_version).is_some()
+    build_for(instance.loader.as_deref(), &instance.game_version).is_some()
 }
 
-/// Поставить (или обновить) мод и Fabric API. true — если мод только что появился.
+/// Поставить (или обновить) мод (и Fabric API — для Fabric и Quilt). true — если мод только что появился.
 pub async fn install(http: &HttpClient, instance: &Instance) -> Result<bool> {
-    let Some(build) = build_for(&instance.game_version) else {
-        bail!("Мода косметики под Minecraft {} нет", instance.game_version);
+    let Some(build) = build_for(instance.loader.as_deref(), &instance.game_version) else {
+        bail!("Мода косметики под эту сборку (Minecraft {}) нет", instance.game_version);
     };
-    crate::commands::content::ensure_project(http, instance, FABRIC_API).await?;
-    let path = instance_mods_dir(&instance.id)?.join(MOD_FILE);
+    if build.loaders == FABRIC {
+        crate::commands::content::ensure_project(http, instance, FABRIC_API).await?;
+    }
+    // В новой сборке Forge без модов папки mods ещё нет (у Fabric её создаёт установка Fabric API)
+    let dir = instance_mods_dir(&instance.id)?;
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(MOD_FILE);
     let existed = path.exists();
     if std::fs::read(&path).ok().as_deref() != Some(build.jar) {
         std::fs::write(&path, build.jar)?;
@@ -88,6 +114,20 @@ pub fn remove(instance: &Instance) {
 /// Аргумент JVM с адресом сервера для мода
 pub fn jvm_arg(server: &str) -> String {
     format!("-Dhytpotchi.server={}", server.trim_end_matches('/'))
+}
+
+/// Аргументы JVM для мода: адрес сервера и системный прокси, если он сейчас отвечает.
+/// Java сама не видит прокси Windows, который ставят VPN-программы (v2rayN, Clash…): лаунчер
+/// ходит через него, а мод шёл бы напрямую и у части игроков упирался в обрывы соединений с
+/// Cloudflare — и не видел косметику других.
+pub fn jvm_args(server: &str) -> Vec<String> {
+    let mut args = vec![jvm_arg(server)];
+    if let Some(proxy) = crate::engine::core::proxy::detect() {
+        if crate::engine::core::proxy::Liveness::new(proxy.clone()).alive() {
+            args.push(format!("-Dhytpotchi.proxy={}", proxy.url));
+        }
+    }
+    args
 }
 
 async fn get_json(http: &HttpClient, url: &str) -> Result<Value> {
@@ -271,14 +311,34 @@ mod tests {
     use super::*;
 
     /// depends.minecraft из fabric.mod.json вшитого jar
-    fn minecraft_range(jar: &[u8]) -> String {
+    /// Диапазон версий игры из вшитого jar: depends.minecraft (Fabric, "~1.16.5") или
+    /// versionRange зависимости minecraft в META-INF/mods.toml (Forge, "[1.20,1.20.2)")
+    fn minecraft_range(jar: &[u8], forge: bool) -> String {
         use std::io::Read;
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(jar)).expect("это не jar");
+        assert!(zip.by_name("ru/hytpotchi/cosmetics/CosmeticsClient.class").is_ok(), "нет CosmeticsClient");
         let mut text = String::new();
+        if forge {
+            // Без pack.mcmeta Forge при каждом запуске останавливается на экране предупреждения
+            assert!(zip.by_name("pack.mcmeta").is_ok(), "нет pack.mcmeta");
+            zip.by_name("META-INF/mods.toml").expect("нет mods.toml").read_to_string(&mut text).unwrap();
+            let block = text.split("modId=\"minecraft\"").nth(1).expect("нет зависимости minecraft");
+            let line = block.lines().find(|l| l.trim_start().starts_with("versionRange")).expect("нет versionRange");
+            return line.split('"').nth(1).unwrap_or_default().to_string();
+        }
         zip.by_name("fabric.mod.json").expect("нет fabric.mod.json").read_to_string(&mut text).unwrap();
         let json: Value = serde_json::from_str(&text).unwrap();
-        assert!(zip.by_name("ru/hytpotchi/cosmetics/CosmeticsClient.class").is_ok(), "нет CosmeticsClient");
         json["depends"]["minecraft"].as_str().unwrap_or_default().to_string()
+    }
+
+    /// Диапазон Maven, как в mods.toml: "[1.20,1.20.2)"
+    fn maven_range_allows(range: &str, v: &str) -> bool {
+        let inner = &range[1..range.len() - 1];
+        let (min, max) = inner.split_once(',').unwrap();
+        let v = version_key(v);
+        let lower = min.is_empty() || if range.starts_with('[') { v >= version_key(min) } else { v > version_key(min) };
+        let upper = max.is_empty() || if range.ends_with(']') { v <= version_key(max) } else { v < version_key(max) };
+        lower && upper
     }
 
     fn version_key(v: &str) -> Vec<u64> {
@@ -307,19 +367,31 @@ mod tests {
     #[test]
     fn embedded_mods_match_their_versions() {
         // Каждый вшитый мод — ровно под те версии игры, в которые лаунчер его ставит:
-        // иначе Fabric откажется запускать игру
+        // иначе загрузчик откажется запускать игру
         for build in BUILDS {
-            let range = minecraft_range(build.jar);
+            let forge = build.loaders == FORGE;
+            let range = minecraft_range(build.jar, forge);
             for v in build.versions {
-                assert!(range_allows(&range, v), "мод с minecraft={range} ставится в {v}");
+                let ok = if forge { maven_range_allows(&range, v) } else { range_allows(&range, v) };
+                assert!(ok, "мод с minecraft={range} ставится в {v}");
             }
         }
         assert!(range_allows("~1.16.5", "1.16.5") && !range_allows("~1.16.5", "1.17"));
         assert!(range_allows(">=1.20 <1.20.2", "1.20") && !range_allows(">=1.20 <1.20.2", "1.20.2"));
+        assert!(maven_range_allows("[1.20,1.20.2)", "1.20.1") && !maven_range_allows("[1.20,1.20.2)", "1.20.2"));
         for v in ["1.16.5", "1.18.2", "1.19.2", "1.20", "1.20.1", "1.21", "1.21.1", "1.21.4", "26.3"] {
-            assert!(build_for(v).is_some(), "{v}");
+            assert!(build_for(Some("fabric"), v).is_some() && build_for(Some("quilt"), v).is_some(), "{v}");
         }
-        assert!(build_for("1.20.2").is_none() && build_for("1.21.3").is_none() && build_for("26.2").is_none());
+        assert!(build_for(Some("fabric"), "1.20.2").is_none() && build_for(Some("fabric"), "26.2").is_none());
+        // Forge — только 1.20–1.20.1; NeoForge и ванилла — без мода
+        assert!(build_for(Some("forge"), "1.20.1").is_some() && build_for(Some("forge"), "1.20").is_some());
+        assert!(build_for(Some("forge"), "1.19.2").is_none() && build_for(Some("forge"), "1.21.1").is_none());
+        assert!(build_for(Some("neoforge"), "1.20.1").is_none() && build_for(None, "1.20.1").is_none());
+        // Сборка Fabric не должна попасть в Forge и наоборот
+        assert!(!std::ptr::eq(
+            build_for(Some("forge"), "1.20.1").unwrap().jar,
+            build_for(Some("fabric"), "1.20.1").unwrap().jar
+        ));
         assert_eq!(jvm_arg("https://srv/"), "-Dhytpotchi.server=https://srv");
         let s = state(&json!({"items": ["crown", 5, "halo"], "owned": ["crown"]}));
         assert_eq!(s.items, vec!["crown", "halo"]);

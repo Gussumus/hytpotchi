@@ -107,30 +107,53 @@ public final class Cosmetics<T> {
 		final List<String> items;
 		final long at;
 		final boolean loading;
+		/** Сколько запросов подряд не удалось (0 — последний удался) */
+		final int failures;
 
-		Selection(List<String> items, long at, boolean loading) {
+		Selection(List<String> items, long at, boolean loading, int failures) {
 			this.items = items;
 			this.at = at;
 			this.loading = loading;
+			this.failures = failures;
+		}
+
+		/** Когда спрашивать снова */
+		long refreshAfter() {
+			if (this.failures > 0) {
+				return Math.min(RETRY_MAX_MS, RETRY_FAILED_MS << Math.min(this.failures - 1, 5));
+			}
+			return this.items.isEmpty() ? REFRESH_EMPTY_MS : REFRESH_MS;
 		}
 	}
 
 	private static final Set<String> BONES = new HashSet<>(Arrays.asList("head", "body", "left_arm", "right_arm"));
-	/** Как часто перепроверять, что надето у игрока */
-	private static final long REFRESH_MS = 3 * 60_000L;
-	private static final long RETRY_MS = 30_000L;
+	/** Как часто перепроверять, что надето у игрока в косметике: смену другие увидят за минуту */
+	private static final long REFRESH_MS = 60_000L;
+	/**
+	 * У кого ничего не надето (на чужих серверах — почти все), перепроверяем реже: иначе мод на
+	 * сервере с толпой игроков слал бы сотни запросов в минуту и съедал лимит сервера Hytpotchi
+	 */
+	private static final long REFRESH_EMPTY_MS = 3 * 60_000L;
+	/** Не удалось узнать, что надето: повтор через 15 с, дальше пауза растёт вдвое — до 5 минут */
+	private static final long RETRY_FAILED_MS = 15_000L;
+	private static final long RETRY_MAX_MS = 5 * 60_000L;
+	/** Каталог: повтор после ошибки и перечитывание, если встретился незнакомый предмет */
+	private static final long CATALOG_RETRY_MS = 30_000L;
 	/** Самая большая текстура 3D-модели, которую примем */
 	private static final int MAX_TEXTURE = 4 * 1024 * 1024;
 
 	private final Platform<T> platform;
 	private final String server;
-	private final ExecutorService pool = Executors.newFixedThreadPool(2, r -> {
-		Thread t = new Thread(r, "Hytpotchi Cosmetics");
-		t.setDaemon(true);
-		return t;
-	});
+	/** Каталог и 3D-модели (запросы покрупнее) */
+	private final ExecutorService pool = daemonPool("Hytpotchi Cosmetics");
+	/**
+	 * Что надето у игроков — отдельно: иначе при медленной сети эти короткие запросы ждали бы в
+	 * очереди за скачиванием 3D-моделей, и косметики других игроков не было бы видно минутами.
+	 */
+	private final ExecutorService lookups = daemonPool("Hytpotchi Cosmetics lookup");
 	private volatile Map<String, Item<T>> catalog = Collections.emptyMap();
 	private volatile long catalogAt = 0;
+	private volatile boolean catalogLoading = false;
 	private final Map<String, Selection> selections = new ConcurrentHashMap<>();
 
 	private Cosmetics(Platform<T> platform, String server) {
@@ -150,20 +173,39 @@ public final class Cosmetics<T> {
 		return c;
 	}
 
+	private static ExecutorService daemonPool(String name) {
+		return Executors.newFixedThreadPool(2, r -> {
+			Thread t = new Thread(r, name);
+			t.setDaemon(true);
+			return t;
+		});
+	}
+
 	public static void log(String message) {
 		// Игра перенаправляет System.out в свой лог во всех версиях
 		System.out.println("[Hytpotchi Cosmetics] " + message);
 	}
 
 	private void loadCatalog() {
+		if (this.catalogLoading) {
+			return;
+		}
+		this.catalogLoading = true;
 		this.catalogAt = System.currentTimeMillis();
 		this.pool.execute(() -> {
 			try {
 				JsonObject root = parse(Net.text(this.server + "/api/cosmetics/catalog")).getAsJsonObject();
+				Map<String, Item<T>> old = this.catalog;
 				Map<String, Item<T>> built = new ConcurrentHashMap<>();
 				for (JsonElement el : root.getAsJsonArray("items")) {
 					JsonObject json = el.getAsJsonObject();
 					String id = json.get("id").getAsString();
+					// Перечитали каталог из-за нового предмета — уже скачанные модели не трогаем
+					Item<T> known = old.get(id);
+					if (known != null) {
+						built.put(id, known);
+						continue;
+					}
 					try {
 						Item<T> item = new Item<>(cubeParts(json.getAsJsonArray("parts")));
 						built.put(id, item);
@@ -178,7 +220,9 @@ public final class Cosmetics<T> {
 				this.catalog = built;
 				log("Каталог косметики загружен: " + built.size() + " предметов");
 			} catch (Exception e) {
-				log("Каталог косметики не загружен: " + e);
+				log("Каталог косметики не загружен: " + e + " — повторю через " + CATALOG_RETRY_MS / 1000 + " с");
+			} finally {
+				this.catalogLoading = false;
 			}
 		});
 	}
@@ -270,43 +314,59 @@ public final class Cosmetics<T> {
 	/** Детали всего, что надето у игрока (пусто, пока не загрузилось). Зовётся из рендера */
 	public List<Part<T>> forPlayer(String name) {
 		long now = System.currentTimeMillis();
-		if (this.catalog.isEmpty() && now - this.catalogAt > RETRY_MS) {
+		Map<String, Item<T>> catalog = this.catalog;
+		if (catalog.isEmpty() && now - this.catalogAt > CATALOG_RETRY_MS) {
 			this.loadCatalog();
 		}
 		String key = name.toLowerCase(java.util.Locale.ROOT);
 		Selection sel = this.selections.get(key);
-		if (sel == null || (!sel.loading && now - sel.at > (sel.items.isEmpty() ? RETRY_MS * 4 : REFRESH_MS))) {
+		if (sel == null || (!sel.loading && now - sel.at > sel.refreshAfter())) {
 			Selection old = sel;
-			this.selections.put(key, new Selection(old == null ? Collections.<String>emptyList() : old.items, now, true));
-			this.pool.execute(() -> this.fetch(key, name, old));
+			List<String> items = old == null ? Collections.<String>emptyList() : old.items;
+			this.selections.put(key, new Selection(items, now, true, old == null ? 0 : old.failures));
+			this.lookups.execute(() -> this.fetch(key, name, old));
 		}
 		if (sel == null || sel.items.isEmpty()) {
 			return Collections.emptyList();
 		}
 		List<Part<T>> out = new ArrayList<>();
+		boolean unknown = false;
 		for (String id : sel.items) {
-			Item<T> item = this.catalog.get(id);
+			Item<T> item = catalog.get(id);
 			if (item != null) {
 				out.addAll(item.parts());
+			} else {
+				unknown = true;
 			}
+		}
+		// Игрок надел предмет, который появился в магазине уже после нашего входа в игру
+		if (unknown && !catalog.isEmpty() && now - this.catalogAt > CATALOG_RETRY_MS) {
+			this.loadCatalog();
 		}
 		return out;
 	}
 
 	private void fetch(String key, String name, Selection old) {
+		int failures = old == null ? 0 : old.failures;
 		try {
-			JsonArray arr = parse(Net.text(this.server + "/api/cosmetics/" + URLEncoder.encode(name, "UTF-8")))
+			JsonArray arr = parse(Net.quickText(this.server + "/api/cosmetics/" + URLEncoder.encode(name, "UTF-8")))
 				.getAsJsonObject()
 				.getAsJsonArray("items");
 			List<String> items = new ArrayList<>();
 			for (JsonElement e : arr) {
 				items.add(e.getAsString());
 			}
-			this.selections.put(key, new Selection(Collections.unmodifiableList(items), System.currentTimeMillis(), false));
+			this.selections.put(key, new Selection(Collections.unmodifiableList(items), System.currentTimeMillis(), false, 0));
+			if (failures > 0) {
+				log("Косметика " + name + " снова доступна");
+			}
 		} catch (Exception e) {
-			// Сервер недоступен — оставляем, что было, и попробуем позже
+			// Сервер недоступен — оставляем, что было, и скоро пробуем снова. В лог — один раз за серию ошибок
+			if (failures == 0) {
+				log("Не удалось узнать, что надето у " + name + ": " + e + " — попробую снова");
+			}
 			this.selections.put(key, new Selection(old == null ? Collections.<String>emptyList() : old.items,
-				System.currentTimeMillis(), false));
+				System.currentTimeMillis(), false, failures + 1));
 		}
 	}
 }

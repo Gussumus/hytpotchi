@@ -240,7 +240,10 @@ export function Cosmetics() {
       <div className="page-head">
         <div>
           <h1>Косметика</h1>
-          <p className="muted">Видна всем игрокам Hytpotchi в сборках Fabric 26.3 — мод лаунчер ставит сам</p>
+          <p className="muted">
+            Видна игрокам Hytpotchi в сборках Fabric и Quilt на 1.16.5, 1.18.2, 1.19.2, 1.20.1, 1.21.1, 1.21.4 и 26.3,
+            а также Forge 1.20.1 — мод лаунчер ставит сам
+          </p>
         </div>
       </div>
 
