@@ -1,14 +1,279 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <title>Hytpotchi</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hytpotchi — лаунчер Minecraft и косметика для персонажа</title>
+  <meta name="description" content="Бесплатный лаунчер Minecraft для Windows. Косметика для персонажа: шапки, крылья, хвосты — от 29 до 149 ₽, выдаётся на аккаунт сразу после оплаты.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #f6f8f7; --surface: #ffffff; --border: #dfe6e2; --text: #13201a; --muted: #5b6b63;
+      --accent: #14a58c; --accent-soft: #e2f6ef;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0c10; --surface: #12161c; --border: #232a33; --text: #eef1f6; --muted: #9aa5b1;
+        --accent: #3ddc84; --accent-soft: rgba(61, 220, 132, .12);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 860px; margin: 0 auto; padding: 0 16px 48px; }
+    header { display: flex; align-items: center; gap: 16px; padding: 40px 0 8px; }
+    header img { width: 64px; height: 64px; }
+    h1 { margin: 0; font-size: 30px; line-height: 1.15; }
+    h2 { margin: 40px 0 12px; font-size: 22px; }
+    p { margin: 0 0 12px; }
+    .lead { color: var(--muted); margin: 0; }
+    .btn {
+      display: inline-block; margin: 20px 12px 0 0; padding: 11px 18px; border-radius: 10px;
+      background: var(--accent); color: #fff; font-weight: 650; text-decoration: none;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+    ul.features { margin: 0; padding-left: 20px; }
+    ul.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+    .item { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 12px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--border); }
+    .item:last-child { border-bottom: 0; }
+    .dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,.15); }
+    .item-slot { color: var(--muted); font-size: 14px; }
+    .item-price { font-weight: 650; min-width: 84px; text-align: right; }
+    ol.steps { margin: 0; padding-left: 22px; }
+    ol.steps li { margin-bottom: 6px; }
+    .note { background: var(--accent-soft); border-radius: 12px; padding: 12px 16px; margin-top: 12px; }
+    a { color: var(--accent); }
+    footer { color: var(--muted); font-size: 14px; margin-top: 48px; border-top: 1px solid var(--border); padding-top: 16px; }
+    @media (max-width: 560px) {
+      h1 { font-size: 24px; }
+      .item { grid-template-columns: 14px 1fr auto; }
+      .item-slot { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.svg" alt="">
+    <div>
+      <h1>Hytpotchi</h1>
+      <p class="lead">Бесплатный лаунчер Minecraft для Windows</p>
+    </div>
+  </header>
+
+  <p>Сборки Vanilla, Fabric, Forge, NeoForge и Quilt на любой версии игры, моды и модпаки с Modrinth,
+  нужная Java ставится сама, друзья и совместная игра без VPN, скины. Аккаунт Hytpotchi — ник и пароль,
+  регистрация прямо в лаунчере.</p>
+  <a class="btn" href="https://github.com/Gussumus/hytpotchi/releases/latest">Скачать для Windows</a>
+  <a class="btn ghost" href="https://github.com/Gussumus/hytpotchi">Исходный код</a>
+
+  <h2>Косметика для персонажа</h2>
+  <p>Шапки, крылья, хвосты и другие украшения для вашего персонажа в Minecraft. Их видите вы и другие
+  игроки Hytpotchi — в одиночных мирах, в мирах друзей и на серверах. Выбираются во вкладке
+  «Косметика» лаунчера. Цены — от 29 до 149 ₽, 4 предмета — бесплатно.</p>
+  <div class="card">
+    <ul class="items">
+        <li class="item">
+          <span class="dot" style="background:#4e342e"></span>
+          <span class="item-name">Усы</span>
+          <span class="item-slot">на лицо</span>
+          <span class="item-price">29 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#c62828"></span>
+          <span class="item-name">Новогодняя шапка</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">49 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#000000"></span>
+          <span class="item-name">Пиксельные очки</span>
+          <span class="item-slot">на лицо</span>
+          <span class="item-price">49 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#8a5a32"></span>
+          <span class="item-name">Колчан со стрелами</span>
+          <span class="item-slot">на спину</span>
+          <span class="item-price">59 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#212121"></span>
+          <span class="item-name">Кошачий хвост</span>
+          <span class="item-slot">хвост</span>
+          <span class="item-price">59 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#3a2a22"></span>
+          <span class="item-name">Лисьи ушки</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">59 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#8d5a3b"></span>
+          <span class="item-name">Рюкзак</span>
+          <span class="item-slot">на спину</span>
+          <span class="item-price">59 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#43a047"></span>
+          <span class="item-name">Цветочный венок</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">59 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#e2711d"></span>
+          <span class="item-name">Лисий хвост</span>
+          <span class="item-slot">хвост</span>
+          <span class="item-price">69 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#c77a3a"></span>
+          <span class="item-name">Гитара</span>
+          <span class="item-slot">на спину</span>
+          <span class="item-price">79 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#eceff1"></span>
+          <span class="item-name">Дождевая тучка</span>
+          <span class="item-slot">над головой</span>
+          <span class="item-price">79 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#8b5a2b"></span>
+          <span class="item-name">Ковбойская шляпа</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">79 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#ffcf40"></span>
+          <span class="item-name">Нимб</span>
+          <span class="item-slot">над головой</span>
+          <span class="item-price">79 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#7a2418"></span>
+          <span class="item-name">Рожки</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">79 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#1c1c21"></span>
+          <span class="item-name">Цилиндр</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">79 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#123631"></span>
+          <span class="item-name">Алмазный меч</span>
+          <span class="item-slot">на спину</span>
+          <span class="item-price">99 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#1a237e"></span>
+          <span class="item-name">Колпак волшебника</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">99 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#f2c12e"></span>
+          <span class="item-name">Корона</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">99 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#c62828"></span>
+          <span class="item-name">Шапка шута</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">99 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#2e7d32"></span>
+          <span class="item-name">Хвост дракона</span>
+          <span class="item-slot">хвост</span>
+          <span class="item-price">129 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#9ea3a8"></span>
+          <span class="item-name">Шлем викинга</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">129 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#ffffff"></span>
+          <span class="item-name">Крылья ангела</span>
+          <span class="item-slot">на спину</span>
+          <span class="item-price">149 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#1a1a1a"></span>
+          <span class="item-name">Крылья бабочки</span>
+          <span class="item-slot">на спину</span>
+          <span class="item-price">149 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#24102c"></span>
+          <span class="item-name">Крылья демона</span>
+          <span class="item-slot">на спину</span>
+          <span class="item-price">149 ₽</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#1565c0"></span>
+          <span class="item-name">Кепка</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">бесплатно</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#263238"></span>
+          <span class="item-name">Наушники</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">бесплатно</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#111111"></span>
+          <span class="item-name">Солнечные очки</span>
+          <span class="item-slot">на лицо</span>
+          <span class="item-price">бесплатно</span>
+        </li>
+        <li class="item">
+          <span class="dot" style="background:#2e7d32"></span>
+          <span class="item-name">Шапка-бини</span>
+          <span class="item-slot">на голову</span>
+          <span class="item-price">бесплатно</span>
+        </li>
+    </ul>
+  </div>
+
+  <h2>Как купить</h2>
+  <div class="card">
+    <ol class="steps">
+      <li>Скачайте и установите лаунчер, войдите в аккаунт Hytpotchi.</li>
+      <li>Откройте вкладку «Косметика» и выберите предмет.</li>
+      <li>Нажмите «Купить» — откроется страница оплаты ЮKassa. Оплата банковской картой или через СБП.</li>
+      <li>Сразу после оплаты предмет появляется на вашем аккаунте и надевается — он ваш навсегда.</li>
+    </ol>
+  </div>
+
+  <h2>Оплата и получение</h2>
+  <p>Цены указаны в рублях. Платёж принимает ЮKassa: данные карты вводятся на её странице, мы их не видим.</p>
+  <p>Косметика — цифровой товар: она начисляется на аккаунт Hytpotchi автоматически сразу после оплаты
+  и доступна во всех сборках, где лаунчер показывает косметику. Физической доставки нет.</p>
+
+  <h2>Возврат</h2>
+  <p>Если предмет не появился на аккаунте, оплата прошла дважды или по ошибке — напишите на
+  <a href="mailto:akiom31@gmail.com">akiom31@gmail.com</a> с ником и датой оплаты. Выдадим предмет или вернём деньги
+  тем же способом, которым вы платили, через ЮKassa.</p>
+
+  <h2>Контакты</h2>
+  <p>Почта для вопросов о покупках и лаунчере: <a href="mailto:akiom31@gmail.com">akiom31@gmail.com</a></p>
+  <p>Продавец — самозанятый, плательщик налога на профессиональный доход.</p>
+
+  <footer>
+    Hytpotchi не связан с Mojang Studios и Microsoft. Minecraft — товарный знак Mojang Synergies AB.
+  </footer>
+</main>
+</body>
 </html>
