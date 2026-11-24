@@ -9,7 +9,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::engine::core::http::{HttpClient, VerifiedDownload};
@@ -112,6 +112,75 @@ pub async fn latest_version(http: &HttpClient, kind: ForgeKind, mc: &str) -> Res
                 .with_context(|| format!("NeoForge не поддерживает Minecraft {mc}"))
         }
     }
+}
+
+/// Версия загрузчика в списке для выбора
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LoaderVersionInfo {
+    pub version: String,
+    /// Не бета/альфа
+    pub stable: bool,
+    /// Её лаунчер ставит сам, если версию не выбрали
+    pub recommended: bool,
+}
+
+/// Версия загрузчика безопасна для адресов и имён файлов (её может прислать интерфейс)
+pub fn valid_loader_version(v: &str) -> bool {
+    !v.is_empty()
+        && v.len() <= 64
+        && !v.contains("..")
+        && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+' | b'_'))
+}
+
+/// Все версии загрузчика для версии игры, новые сверху
+pub async fn versions(http: &HttpClient, loader: &str, mc: &str) -> Result<Vec<LoaderVersionInfo>> {
+    let mut list = match ForgeKind::parse(loader) {
+        Some(ForgeKind::Forge) => forge_versions(http, mc).await?,
+        Some(ForgeKind::NeoForge) => {
+            let recommended = latest_version(http, ForgeKind::NeoForge, mc).await.ok();
+            let (artifact, prefix) = if mc == "1.20.1" {
+                ("forge", "1.20.1-".to_string())
+            } else {
+                ("neoforge", neoforge_prefix(mc))
+            };
+            let all: NeoVersions = http.get_json(&format!("{NEO_API}/{artifact}")).await?;
+            all.versions
+                .into_iter()
+                .filter(|v| v.starts_with(&prefix))
+                .map(|v| LoaderVersionInfo {
+                    stable: !is_unstable(&v),
+                    recommended: recommended.as_deref() == Some(v.as_str()),
+                    version: v,
+                })
+                .collect()
+        }
+        None => crate::engine::game::install::meta_loader_versions(http, loader, mc).await?,
+    };
+    list.retain(|v| valid_loader_version(&v.version));
+    list.sort_by(|a, b| crate::engine::game::install::loader_version_cmp(&b.version, &a.version));
+    Ok(list)
+}
+
+/// Forge: все сборки из maven-metadata.json, «рекомендуемая» — из promotions_slim.json
+async fn forge_versions(http: &HttpClient, mc: &str) -> Result<Vec<LoaderVersionInfo>> {
+    let all: std::collections::HashMap<String, Vec<String>> =
+        http.get_json(&format!("{FORGE_FILES}/maven-metadata.json")).await?;
+    let recommended = latest_version(http, ForgeKind::Forge, mc).await.ok();
+    Ok(all
+        .get(mc)
+        .map(|list| list.iter().filter_map(|full| forge_build(mc, full)).collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|v| LoaderVersionInfo { stable: true, recommended: recommended.as_deref() == Some(v.as_str()), version: v })
+        .collect())
+}
+
+/// "1.7.10-10.13.4.1614-1.7.10" → "10.13.4.1614" (так версию ждёт установщик и promotions)
+fn forge_build(mc: &str, full: &str) -> Option<String> {
+    let rest = full.strip_prefix(mc)?.strip_prefix('-')?;
+    let build = rest.strip_suffix(&format!("-{mc}")).unwrap_or(rest);
+    (!build.is_empty()).then(|| build.to_string())
 }
 
 fn installer_urls(kind: ForgeKind, mc: &str, version: &str) -> Vec<String> {
@@ -326,5 +395,23 @@ mod tests {
         assert_eq!(neoforge_prefix("1.21"), "21.0.");
         assert_eq!(neoforge_prefix("1.20.6"), "20.6.");
         assert_eq!(neoforge_prefix("26.3"), "26.3.");
+    }
+
+    #[test]
+    fn forge_builds() {
+        assert_eq!(forge_build("1.20.1", "1.20.1-47.4.29").as_deref(), Some("47.4.29"));
+        assert_eq!(forge_build("1.7.10", "1.7.10-10.13.4.1614-1.7.10").as_deref(), Some("10.13.4.1614"));
+        assert_eq!(forge_build("1.7.10", "1.7.10-10.13.0.1150").as_deref(), Some("10.13.0.1150"));
+        assert_eq!(forge_build("1.2", "1.2.5-3.4.9"), None);
+    }
+
+    #[test]
+    fn loader_version_is_safe() {
+        assert!(valid_loader_version("47.4.29"));
+        assert!(valid_loader_version("1.20.1-47.1.106"));
+        assert!(valid_loader_version("0.31.0-beta.6"));
+        assert!(!valid_loader_version("../../evil"));
+        assert!(!valid_loader_version("1/2"));
+        assert!(!valid_loader_version(""));
     }
 }

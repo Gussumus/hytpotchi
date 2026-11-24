@@ -3,6 +3,8 @@
 pub mod crashcause;
 pub mod install;
 pub mod java;
+#[cfg(test)]
+mod loader_matrix;
 pub mod loaders;
 pub mod manifest;
 pub mod nbt;

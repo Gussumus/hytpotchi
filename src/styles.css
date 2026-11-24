@@ -1830,3 +1830,16 @@ input[type='range']::-webkit-slider-thumb {
     transition: none !important;
   }
 }
+
+/* Галочка внутри подсказки поля (например, «показать бета-версии») */
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.inline-check input {
+  margin: 0;
+  accent-color: var(--accent, var(--mint));
+}

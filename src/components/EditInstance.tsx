@@ -4,6 +4,7 @@ import { api } from '../lib/ipc'
 import { ACCENTS, guessJava, loaderName } from '../lib/format'
 import { Modal } from './Modal'
 import { MemorySlider } from './MemorySlider'
+import { LoaderVersionPicker } from './LoaderVersionPicker'
 import { IconImage, IconPackage, IconTrash } from './Icons'
 
 export function EditInstance({ id }: { id: string }) {
@@ -19,6 +20,9 @@ export function EditInstance({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
   const [group, setGroup] = useState(inst?.group ?? '')
+  /** "" — рекомендуемая */
+  const initialLoaderVersion = inst?.loaderPinned ? inst.loaderVersion ?? '' : ''
+  const [loaderVersion, setLoaderVersion] = useState(initialLoaderVersion)
   const allInstances = useStore((s) => s.instances)
   const setPack = useStore((s) => s.setPack)
   const groups = [...new Set(allInstances.map((i) => i.group).filter(Boolean) as string[])]
@@ -55,9 +59,18 @@ export function EditInstance({ id }: { id: string }) {
   async function save() {
     setBusy(true)
     try {
-      await api.instanceUpdate(id, { name, memoryMb: memory, jvmArgs, accent, group })
+      const loaderChanged = !!inst?.loader && loaderVersion !== initialLoaderVersion
+      await api.instanceUpdate(id, {
+        name,
+        memoryMb: memory,
+        jvmArgs,
+        accent,
+        group,
+        ...(loaderChanged ? { loaderVersion } : {}),
+      })
       await refresh()
       setModal(null)
+      if (loaderChanged) toast('success', 'Загрузчик переустановится при следующем запуске')
     } catch (e) {
       toast('error', (e as Error).message)
     } finally {
@@ -155,6 +168,15 @@ export function EditInstance({ id }: { id: string }) {
           )}
         </div>
       </div>
+      {inst.loader && (
+        <LoaderVersionPicker
+          loader={inst.loader}
+          gameVersion={inst.gameVersion}
+          value={loaderVersion}
+          onChange={setLoaderVersion}
+          installed={inst.versionId ? inst.loaderVersion : null}
+        />
+      )}
       <div className="field">
         <span>Оперативная память</span>
         <MemorySlider value={memory} onChange={setMemory} />

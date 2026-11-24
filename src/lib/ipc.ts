@@ -21,6 +21,7 @@ import type {
   AppUpdate,
   Instance,
   InstancePatch,
+  LoaderVersion,
   JavaList,
   JavaRuntime,
   LaunchProgress,
@@ -87,9 +88,13 @@ export const api = {
     name: string
     gameVersion: string
     loader: string | null
+    /** null — рекомендуемая */
+    loaderVersion?: string | null
     memoryMb: number
     accent: string
   }) => call<Instance>('instance_create', p),
+  loaderVersions: (loader: string, gameVersion: string) =>
+    call<LoaderVersion[]>('loader_versions', { loader, gameVersion }),
   instanceUpdate: (id: string, patch: InstancePatch) => call<Instance>('instance_update', { id, patch }),
   instanceRemove: (id: string) => call<void>('instance_remove', { id }),
   instanceOpenFolder: (id: string) => call<void>('instance_open_folder', { id }),

@@ -103,7 +103,7 @@ pub async fn launch_instance(app: &AppHandle, instance_id: &str, server: Option<
     // 0. Раньше для Quilt выбиралась устаревшая версия (список в мета-API не отсортирован),
     // и новые версии игры падали с «Unsupported class file major version». Если в сборке
     // записан Quilt старее актуального стабильного — переустанавливаем загрузчик.
-    if instance.loader.as_deref() == Some("quilt") {
+    if instance.loader.as_deref() == Some("quilt") && !instance.loader_pinned {
         if let Some(current) = instance.loader_version.clone() {
             if let Ok(latest) =
                 latest_loader_version(&http, "quilt", &instance.game_version).await

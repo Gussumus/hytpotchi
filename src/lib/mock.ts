@@ -277,7 +277,8 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
         name: String(args.name),
         gameVersion: String(args.gameVersion),
         loader: (args.loader as Instance['loader']) ?? null,
-        loaderVersion: null,
+        loaderVersion: args.loaderVersion ? String(args.loaderVersion) : null,
+        loaderPinned: Boolean(args.loaderVersion),
         versionId: null,
         memoryMb: Number(args.memoryMb),
         jvmArgs: '',
@@ -290,9 +291,27 @@ export async function mockCall<T>(cmd: string, args: Record<string, unknown> = {
       instances = [inst, ...instances]
       return r(inst)
     }
-    case 'instance_update':
-      instances = instances.map((i) => (i.id === args.id ? { ...i, ...(args.patch as object) } : i))
+    case 'loader_versions': {
+      await sleep(400)
+      const builds: Record<string, string[]> = {
+        forge: ['47.4.29', '47.4.28', '47.4.10', '47.3.0', '47.2.17', '47.1.0'],
+        neoforge: ['21.1.180', '21.1.172', '21.1.77', '21.1.1-beta'],
+        fabric: ['0.20.1', '0.19.5', '0.18.4', '0.17.3'],
+        quilt: ['0.30.2', '0.30.0-beta.8', '0.29.2'],
+      }
+      const list = builds[String(args.loader)] ?? []
+      const recommended = String(args.loader) === 'forge' ? '47.4.28' : list.find((v) => !v.includes('beta'))
+      return r(list.map((v) => ({ version: v, stable: !v.includes('beta'), recommended: v === recommended })))
+    }
+    case 'instance_update': {
+      const patch = { ...(args.patch as Record<string, unknown>) }
+      if (typeof patch.loaderVersion === 'string') {
+        patch.loaderPinned = patch.loaderVersion !== ''
+        patch.loaderVersion = patch.loaderVersion || null
+      }
+      instances = instances.map((i) => (i.id === args.id ? { ...i, ...patch } : i))
       return r(instances.find((i) => i.id === args.id))
+    }
     case 'instance_remove':
       instances = instances.filter((i) => i.id !== args.id)
       return r(undefined)

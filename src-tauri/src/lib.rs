@@ -98,6 +98,7 @@ pub fn run() {
             commands::game::java_install,
             commands::game::system_info,
             commands::game::instance_create,
+            commands::game::loader_versions,
             commands::game::instance_list,
             commands::game::instance_update,
             commands::game::instance_remove,

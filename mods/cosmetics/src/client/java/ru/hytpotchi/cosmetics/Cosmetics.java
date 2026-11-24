@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.platform.NativeImage;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -19,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.GZIPInputStream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
@@ -75,7 +77,12 @@ public final class Cosmetics {
 		loadCatalog();
 	}
 
-	private static <T> T get(String path, HttpResponse.BodyHandler<T> body) throws Exception {
+	/**
+	 * GET к серверу Hytpotchi. Ответ — обязательно сжатый: у части российских провайдеров без VPN
+	 * соединение с Cloudflare обрывается после ~16 КБ, а каталог и 3D-модели без сжатия больше
+	 * (каталог 31 КБ, со сжатием 7 КБ). Без этого у таких игроков косметика не видна совсем.
+	 */
+	private static byte[] get(String path, int maxBytes) throws Exception {
 		// Свой клиент на каждый запрос — без переиспользования соединений
 		try (HttpClient client = HttpClient.newBuilder()
 			.version(HttpClient.Version.HTTP_1_1)
@@ -83,19 +90,28 @@ public final class Cosmetics {
 			.build()) {
 			HttpRequest req = HttpRequest.newBuilder(URI.create(server + path))
 				.timeout(Duration.ofSeconds(30))
-				.header("User-Agent", "HytpotchiCosmetics/2")
+				.header("User-Agent", "HytpotchiCosmetics/3")
+				.header("Accept-Encoding", "gzip")
 				.GET()
 				.build();
-			HttpResponse<T> resp = client.send(req, body);
-			if (resp.statusCode() != 200) {
-				throw new IllegalStateException("HTTP " + resp.statusCode());
+			HttpResponse<InputStream> resp = client.send(req, HttpResponse.BodyHandlers.ofInputStream());
+			try (InputStream body = resp.body()) {
+				if (resp.statusCode() != 200) {
+					throw new IllegalStateException("HTTP " + resp.statusCode());
+				}
+				boolean gzip = resp.headers().firstValue("Content-Encoding").filter("gzip"::equalsIgnoreCase).isPresent();
+				InputStream in = gzip ? new GZIPInputStream(body) : body;
+				byte[] data = in.readNBytes(maxBytes + 1);
+				if (data.length > maxBytes) {
+					throw new IllegalStateException("ответ больше " + maxBytes + " байт");
+				}
+				return data;
 			}
-			return resp.body();
 		}
 	}
 
 	private static String getText(String path) throws Exception {
-		return get(path, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		return new String(get(path, 8 * 1024 * 1024), StandardCharsets.UTF_8);
 	}
 
 	private static void loadCatalog() {
@@ -146,11 +162,7 @@ public final class Cosmetics {
 				for (String name : data.textures()) {
 					String key = dir + "/" + name;
 					if (!images.containsKey(key)) {
-						byte[] png = get("/" + key, HttpResponse.BodyHandlers.ofByteArray());
-						if (png.length > MAX_TEXTURE) {
-							throw new IllegalArgumentException("текстура больше 4 МБ");
-						}
-						images.put(key, NativeImage.read(png));
+						images.put(key, NativeImage.read(get("/" + key, MAX_TEXTURE)));
 					}
 				}
 				loaded.add(new Loaded(json, data, dir));

@@ -7,6 +7,7 @@ import { Modal } from './Modal'
 import { MemorySlider } from './MemorySlider'
 import { IconCoffee, IconSearch } from './Icons'
 import { Cover } from './Cover'
+import { LoaderVersionPicker } from './LoaderVersionPicker'
 
 type Filter = 'release' | 'snapshot' | 'old'
 type LoaderChoice = 'vanilla' | 'fabric' | 'forge' | 'neoforge' | 'quilt'
@@ -33,6 +34,9 @@ export function CreateInstance() {
   const [filter, setFilter] = useState<Filter>('release')
   const [query, setQuery] = useState('')
   const [loader, setLoader] = useState<LoaderChoice>('fabric')
+  /** "" — рекомендуемая */
+  const [loaderVersion, setLoaderVersion] = useState('')
+  const [loaderOk, setLoaderOk] = useState(true)
   const [memory, setMemory] = useState(system?.recommendedMemoryMb ?? 4096)
   const [accent, setAccent] = useState(() => ACCENTS[Math.floor(Math.random() * ACCENTS.length)])
   const [busy, setBusy] = useState(false)
@@ -41,6 +45,12 @@ export function CreateInstance() {
   useEffect(() => {
     loadVersions().then((v) => v && setVersion((cur) => cur ?? v.latestRelease))
   }, [loadVersions])
+
+  // Другая версия игры или загрузчик — версия загрузчика снова «рекомендуемая»
+  useEffect(() => {
+    setLoaderVersion('')
+    setLoaderOk(true)
+  }, [loader, version])
 
   const list = useMemo(() => {
     const all = versions?.versions ?? []
@@ -61,6 +71,7 @@ export function CreateInstance() {
         name: finalName,
         gameVersion: version,
         loader: loader === 'vanilla' ? null : loader,
+        loaderVersion: loader === 'vanilla' || !loaderVersion ? null : loaderVersion,
         memoryMb: memory,
         accent,
       })
@@ -91,7 +102,7 @@ export function CreateInstance() {
           <button className="btn ghost" onClick={() => setModal(null)}>
             Отмена
           </button>
-          <button className="btn primary" disabled={!version || busy} onClick={submit}>
+          <button className="btn primary" disabled={!version || busy || (loader !== 'vanilla' && !loaderOk)} onClick={submit}>
             {busy ? 'Создаём…' : 'Создать сборку'}
           </button>
         </>
@@ -104,7 +115,8 @@ export function CreateInstance() {
             <div className="create-preview-text">
               <strong>{finalName || 'Новая сборка'}</strong>
               <span>
-                {LOADERS.find((l) => l.id === loader)!.name} · {version ?? '—'}
+                {LOADERS.find((l) => l.id === loader)!.name}
+                {loader !== 'vanilla' && loaderVersion ? ` ${loaderVersion}` : ''} · {version ?? '—'}
               </span>
             </div>
           </div>
@@ -125,6 +137,16 @@ export function CreateInstance() {
               ))}
             </div>
           </div>
+
+          {loader !== 'vanilla' && version && (
+            <LoaderVersionPicker
+              loader={loader}
+              gameVersion={version}
+              value={loaderVersion}
+              onChange={setLoaderVersion}
+              onAvailable={setLoaderOk}
+            />
+          )}
 
           <div className="field">
             <span>Цвет</span>

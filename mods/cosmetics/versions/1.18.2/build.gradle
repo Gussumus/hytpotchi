@@ -1,0 +1,4 @@
+plugins {
+	id 'net.fabricmc.fabric-loom-remap' version '1.19.4'
+}
+apply from: '../shared.gradle'

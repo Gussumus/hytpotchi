@@ -86,6 +86,9 @@ pub async fn ensure_version_files(
         progress,
     )
     .await?;
+    if manifest.id != manifest.jar_id {
+        link_client_jar(&manifest.jar_id, &manifest.id)?;
+    }
 
     // 2. Библиотеки
     let lib_root = libraries_dir()?;
@@ -116,6 +119,42 @@ pub async fn ensure_version_files(
 
     // 4. Ресурсы
     ensure_assets(client, manifest, progress).await
+}
+
+/// Клиент для версии с загрузчиком — копия ванильного под именем `versions/<id>/<id>.jar`,
+/// как у официального лаунчера. Forge и NeoForge 1.17+ узнают ванильный jar в classpath
+/// только по этому имени (`-DignoreList=…,${version_name}.jar`), а иначе грузят Minecraft
+/// второй раз: «ResolutionException: Modules _1._20._1 and minecraft export package …».
+/// Жёсткая ссылка места не занимает; не вышло — обычная копия.
+fn link_client_jar(parent_id: &str, id: &str) -> Result<()> {
+    let src = version_jar_path(parent_id)?;
+    let dst = version_jar_path(id)?;
+    let same = match (std::fs::metadata(&src), std::fs::metadata(&dst)) {
+        (Ok(s), Ok(d)) => s.len() == d.len(),
+        _ => false,
+    };
+    if same {
+        return Ok(());
+    }
+    if let Some(parent) = dst.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let _ = std::fs::remove_file(&dst);
+    if std::fs::hard_link(&src, &dst).is_err() {
+        let tmp = dst.with_extension("jar.part");
+        std::fs::copy(&src, &tmp).with_context(|| format!("Не удалось скопировать {}", src.display()))?;
+        std::fs::rename(&tmp, &dst)?;
+    }
+    Ok(())
+}
+
+/// Jar клиента для classpath: у версии с загрузчиком — своя копия (см. [`link_client_jar`])
+pub fn client_jar_path(manifest: &VersionManifest) -> Result<std::path::PathBuf> {
+    let own = version_jar_path(&manifest.id)?;
+    if manifest.id != manifest.jar_id && own.is_file() {
+        return Ok(own);
+    }
+    version_jar_path(&manifest.jar_id)
 }
 
 #[derive(Deserialize)]
@@ -290,6 +329,26 @@ pub async fn latest_loader_version(
     let entries: Vec<LoaderEntry> = client.get_json(&url).await?;
     pick_loader_version(&entries)
         .with_context(|| format!("{loader} не поддерживает Minecraft {game_version}"))
+}
+
+/// Все версии Fabric/Quilt для версии игры (порядок — как в мета-API)
+pub async fn meta_loader_versions(
+    client: &HttpClient,
+    loader: &str,
+    game_version: &str,
+) -> Result<Vec<crate::engine::game::loaders::LoaderVersionInfo>> {
+    let base = loader_meta(loader)?;
+    let url = format!("{base}/versions/loader/{}", urlencoding::encode(game_version));
+    let entries: Vec<LoaderEntry> = client.get_json(&url).await?;
+    let recommended = pick_loader_version(&entries);
+    Ok(entries
+        .iter()
+        .map(|e| crate::engine::game::loaders::LoaderVersionInfo {
+            stable: is_stable_loader(&e.loader),
+            recommended: recommended.as_deref() == Some(e.loader.version.as_str()),
+            version: e.loader.version.clone(),
+        })
+        .collect())
 }
 
 fn is_stable_loader(info: &LoaderInfo) -> bool {

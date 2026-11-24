@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::engine::core::paths::{assets_dir, libraries_dir, version_jar_path};
+use crate::engine::core::paths::{assets_dir, libraries_dir};
+use crate::engine::game::install::client_jar_path;
 use crate::engine::game::java::JavaRuntime;
 use crate::engine::game::manifest::{ArgValue, Argument, VersionManifest};
 
@@ -105,7 +106,7 @@ pub fn plan_launch(ctx: LaunchContext<'_>) -> Result<LaunchPlan> {
     let assets = assets_dir()?;
     let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
 
-    let client_jar = version_jar_path(&m.jar_id)?;
+    let client_jar = client_jar_path(m)?;
     let mut classpath: Vec<String> = m
         .classpath_entries()
         .into_iter()

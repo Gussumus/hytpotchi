@@ -7,6 +7,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::engine::core::http::HttpClient;
 use crate::engine::core::paths::{app_dir, instance_game_dir};
 use crate::engine::game::java::{self, JavaRuntime};
+use crate::engine::game::loaders;
 use crate::engine::game::manifest::fetch_version_list;
 use crate::engine::game::now_playing::discord;
 use crate::engine::game::ping::{self, ServerStatus};
@@ -118,10 +119,31 @@ pub async fn instance_create(
     name: String,
     game_version: String,
     loader: Option<String>,
+    loader_version: Option<String>,
     memory_mb: Option<u32>,
     accent: Option<String>,
 ) -> CmdResult<Instance> {
-    store::create(&name, &game_version, loader, memory_mb.unwrap_or(4096), accent).map_err(err)
+    if let Some(v) = loader_version.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+        if !loaders::valid_loader_version(v) {
+            return Err("Неверная версия загрузчика".into());
+        }
+    }
+    let mut inst = store::create(&name, &game_version, loader, memory_mb.unwrap_or(4096), accent).map_err(err)?;
+    if let Some(v) = loader_version.filter(|_| inst.loader.is_some()) {
+        store::choose_loader_version(&mut inst, &v).map_err(err)?;
+        store::save(&inst).map_err(err)?;
+    }
+    Ok(inst)
+}
+
+/// Версии загрузчика (Forge, NeoForge, Fabric, Quilt) для версии игры — для выбора в интерфейсе
+#[command]
+pub async fn loader_versions(
+    http: State<'_, HttpClient>,
+    loader: String,
+    game_version: String,
+) -> CmdResult<Vec<loaders::LoaderVersionInfo>> {
+    loaders::versions(&http, &loader, &game_version).await.map_err(err)
 }
 
 #[command]

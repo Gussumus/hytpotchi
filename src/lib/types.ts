@@ -6,6 +6,8 @@ export interface Instance {
   gameVersion: string
   loader: Loader | null
   loaderVersion: string | null
+  /** Версию загрузчика выбрал игрок (иначе лаунчер ставит рекомендуемую) */
+  loaderPinned?: boolean
   versionId: string | null
   memoryMb: number
   jvmArgs: string
@@ -26,6 +28,15 @@ export interface InstancePatch {
   accent?: string
   /** Пустая строка — убрать из группы */
   group?: string
+  /** Версия загрузчика; пустая строка — рекомендуемая */
+  loaderVersion?: string
+}
+
+/** Версия загрузчика (Forge, NeoForge, Fabric, Quilt) в списке для выбора */
+export interface LoaderVersion {
+  version: string
+  stable: boolean
+  recommended: boolean
 }
 
 export interface UpdateInfo {

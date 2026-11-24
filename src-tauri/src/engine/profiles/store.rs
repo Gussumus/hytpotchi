@@ -17,6 +17,9 @@ pub struct Instance {
     pub loader: Option<String>,
     #[serde(default)]
     pub loader_version: Option<String>,
+    /// Версию загрузчика выбрал игрок — лаунчер её сам не меняет
+    #[serde(default)]
+    pub loader_pinned: bool,
     /// Установленный id версии для запуска (профиль загрузчика)
     #[serde(default)]
     pub version_id: Option<String>,
@@ -48,6 +51,8 @@ pub struct InstancePatch {
     pub accent: Option<String>,
     /// Пустая строка — убрать из группы
     pub group: Option<String>,
+    /// Версия загрузчика; пустая строка — подбирать самому (рекомендуемую)
+    pub loader_version: Option<String>,
 }
 
 fn config_path(id: &str) -> Result<std::path::PathBuf> {
@@ -115,6 +120,7 @@ pub fn create(
         game_version: game_version.to_string(),
         loader,
         loader_version: None,
+        loader_pinned: false,
         version_id: None,
         memory_mb: memory_mb.clamp(1024, 65536),
         jvm_args: String::new(),
@@ -148,8 +154,33 @@ pub fn update(id: &str, patch: InstancePatch) -> Result<Instance> {
         let group = group.trim().chars().take(32).collect::<String>();
         inst.group = (!group.is_empty()).then_some(group);
     }
+    if let Some(version) = patch.loader_version {
+        choose_loader_version(&mut inst, &version)?;
+    }
     save(&inst)?;
     Ok(inst)
+}
+
+/// Выбрать версию загрузчика ("" — рекомендуемую). Загрузчик переустановится при запуске.
+pub fn choose_loader_version(inst: &mut Instance, version: &str) -> Result<()> {
+    let version = version.trim();
+    if inst.loader.is_none() {
+        bail!("В ванильной сборке нет загрузчика");
+    }
+    if !version.is_empty() && !crate::engine::game::loaders::valid_loader_version(version) {
+        bail!("Неверная версия загрузчика");
+    }
+    let chosen = (!version.is_empty()).then(|| version.to_string());
+    let unchanged = match &chosen {
+        Some(v) => inst.loader_pinned && inst.loader_version.as_ref() == Some(v),
+        None => !inst.loader_pinned,
+    };
+    if !unchanged {
+        inst.loader_pinned = chosen.is_some();
+        inst.loader_version = chosen;
+        inst.version_id = None;
+    }
+    Ok(())
 }
 
 /// Поставить свою обложку (копируется в каталог сборки)

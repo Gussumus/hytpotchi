@@ -1,0 +1,63 @@
+// Общая сборка мода под одну версию игры (versions/<версия>/build.gradle подключает этот файл).
+// Свой код версии — versions/<версия>/src, общий (сеть, каталог, геометрия) — common/java.
+version = project.mod_version
+group = 'ru.hytpotchi'
+
+base {
+	archivesName = "hytpotchi-cosmetics-mc${project.minecraft_version}"
+}
+
+repositories {
+	maven { url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+sourceSets {
+	main {
+		java.srcDir '../../common/java'
+		resources.srcDir '../template'
+		resources.srcDir '../../src/client/resources'
+	}
+}
+
+processResources {
+	// id мода Fabric API: до 1.18 он назывался "fabric" (fabric_api_id в gradle.properties версии)
+	def props = [version: project.mod_version, minecraft: project.mod_minecraft, java: project.java_release,
+		fabric_api: project.findProperty('fabric_api_id') ?: 'fabric-api']
+	inputs.properties props
+	filesMatching('fabric.mod.json') {
+		expand props
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = project.java_release as int
+	it.options.encoding = 'UTF-8'
+	// Java 8 у 1.16.5 — javac предупреждает, что эта цель устарела; это ожидаемо
+	it.options.compilerArgs << '-Xlint:-options'
+}
+
+// Проверка в игре: gradlew runClient — заходит ником gussumus (на нём надета косметика),
+// сам создаёт мир (TestShot), снимает игрока спереди и сзади в run/screenshots и закрывает игру.
+loom {
+	runs {
+		client {
+			vmArg '-Dhytpotchi.server=https://hytpotchi-skins.akiom31.workers.dev'
+			vmArg '-Dhytpotchi.cosmetics.screenshot=10'
+			programArgs '--username', 'gussumus'
+		}
+	}
+}
+
+// Сама сборка идёт на Java 25+ (требование Loom), а игра в runClient — на Java своей версии
+tasks.withType(JavaExec).configureEach {
+	javaLauncher = javaToolchains.launcherFor {
+		languageVersion = JavaLanguageVersion.of((project.findProperty('run_java') ?: project.java_release) as int)
+	}
+}
