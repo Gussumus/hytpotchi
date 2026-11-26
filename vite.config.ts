@@ -5,6 +5,11 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
+  build: {
+    rollupOptions: {
+      input: { index: 'launcher.html' },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,
