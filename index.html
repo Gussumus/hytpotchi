@@ -246,20 +246,9 @@ try {
     headJoint.rotation.y = 0;
   });
 
-  // Чётко видимый цикл: персонаж спокойно стоит, затем машет левой рукой.
-  // Используем штатные анимации библиотеки, а не неподдерживаемые callback overlays.
-  const setIdle = () => {
-    viewer.animation = new skinview3d.IdleAnimation();
-    viewer.animation.speed = 1;
-  };
-  setIdle();
-
-  const waveEvery = 12000;
-  window.setInterval(() => {
-    viewer.animation = new skinview3d.WaveAnimation('left');
-    viewer.animation.speed = 1.15;
-    window.setTimeout(setIdle, 1900);
-  }, waveEvery);
+  // Оставляем только спокойную idle-анимацию без взмахов рукой.
+  viewer.animation = new skinview3d.IdleAnimation();
+  viewer.animation.speed = 0.7;
 } catch (error) {
   console.error('Hytpotchi avatar error:', error);
   if (hint) hint.textContent = 'Не удалось загрузить персонажа (skin.png).';
