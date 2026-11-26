@@ -503,7 +503,7 @@ document.querySelectorAll('.catalog .item').forEach(item => {
   item.addEventListener('keydown', event => {
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCosmetic(type, item); }
   });
-}
+});
 
 const previewPanels = {
   home: '<h3>С возвращением!</h3><p>Твой следующий мир уже ждёт.</p><div class="preview-game"><div class="preview-tile"><span>▶</span><b>Быстрый запуск</b><small>Продолжить игру</small></div><div class="preview-tile"><span>☻</span><b>Твой персонаж</b><small>Скин и образ</small></div></div><span class="preview-action">Выбрать профиль</span>',
