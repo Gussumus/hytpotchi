@@ -1,80 +1,30 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hytpotchi — лаунчер Minecraft и косметика для персонажа</title>
-  <meta name="description" content="Бесплатный лаунчер Minecraft для Windows. Косметика для персонажа: шапки, крылья, хвосты — от 29 до 149 ₽, выдаётся на аккаунт сразу после оплаты.">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <style>
-    :root {
-      --bg: #f6f8f7; --surface: #ffffff; --border: #dfe6e2; --text: #13201a; --muted: #5b6b63;
-      --accent: #14a58c; --accent-soft: #e2f6ef;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0a0c10; --surface: #12161c; --border: #232a33; --text: #eef1f6; --muted: #9aa5b1;
-        --accent: #3ddc84; --accent-soft: rgba(61, 220, 132, .12);
-      }
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    }
-    main { max-width: 860px; margin: 0 auto; padding: 0 16px 48px; }
-    header { display: flex; align-items: center; gap: 16px; padding: 40px 0 8px; }
-    header img { width: 64px; height: 64px; }
-    h1 { margin: 0; font-size: 30px; line-height: 1.15; }
-    h2 { margin: 40px 0 12px; font-size: 22px; }
-    p { margin: 0 0 12px; }
-    .lead { color: var(--muted); margin: 0; }
-    .btn {
-      display: inline-block; margin: 20px 12px 0 0; padding: 11px 18px; border-radius: 10px;
-      background: var(--accent); color: #fff; font-weight: 650; text-decoration: none;
-    }
-    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
-    ul.features { margin: 0; padding-left: 20px; }
-    ul.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-    .item { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 12px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--border); }
-    .item:last-child { border-bottom: 0; }
-    .dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,.15); }
-    .item-slot { color: var(--muted); font-size: 14px; }
-    .item-price { font-weight: 650; min-width: 84px; text-align: right; }
-    ol.steps { margin: 0; padding-left: 22px; }
-    ol.steps li { margin-bottom: 6px; }
-    .note { background: var(--accent-soft); border-radius: 12px; padding: 12px 16px; margin-top: 12px; }
-    a { color: var(--accent); }
-    footer { color: var(--muted); font-size: 14px; margin-top: 48px; border-top: 1px solid var(--border); padding-top: 16px; }
-    @media (max-width: 560px) {
-      h1 { font-size: 24px; }
-      .item { grid-template-columns: 14px 1fr auto; }
-      .item-slot { display: none; }
-    }
-  </style>
-</head>
-<body>
-<main>
-  <header>
-    <img src="icon.svg" alt="">
-    <div>
-      <h1>Hytpotchi</h1>
-      <p class="lead">Бесплатный лаунчер Minecraft для Windows</p>
-    </div>
-  </header>
-
-  <p>Сборки Vanilla, Fabric, Forge, NeoForge и Quilt на любой версии игры, моды и модпаки с Modrinth,
-  нужная Java ставится сама, друзья и совместная игра без VPN, скины. Аккаунт Hytpotchi — ник и пароль,
-  регистрация прямо в лаунчере.</p>
-  <a class="btn" href="https://github.com/Gussumus/hytpotchi/releases/latest">Скачать для Windows</a>
-  <a class="btn ghost" href="https://github.com/Gussumus/hytpotchi">Исходный код</a>
-
-  <h2>Косметика для персонажа</h2>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hytpotchi — Minecraft начинается здесь</title>
+<meta name="description" content="Hytpotchi — бесплатный лаунчер Minecraft. Версии, моды, модпаки, скины и игра с друзьями.">
+<meta name="theme-color" content="#101713">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--bg:#0c110f;--panel:rgba(24,34,29,.72);--line:rgba(202,231,211,.11);--text:#edf5ef;--muted:#9baea2;--green:#74d69a;--mint:#b6f3c9}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 75% 12%,rgba(59,119,78,.22),transparent 38%),radial-gradient(ellipse at 10% 45%,rgba(43,91,64,.13),transparent 35%),var(--bg);color:var(--text);font:15px/1.65 Manrope,system-ui,sans-serif;overflow-x:hidden}body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.18;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,black,transparent 75%)}
+a{color:inherit;text-decoration:none}.wrap{width:min(1160px,calc(100% - 44px));margin:auto}.topbar{height:82px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);position:relative;z-index:3}.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:19px;letter-spacing:-.6px}.brand img{width:38px;height:38px}.brand span{color:var(--green)}nav{display:flex;gap:30px;color:#b7c6bc;font-size:13px}nav a:hover{color:var(--mint)}.nav-download,.button{border:1px solid rgba(116,214,154,.35);background:linear-gradient(135deg,#65c987,#3b9b68);color:#07140c;font-weight:800;padding:12px 19px;border-radius:12px;box-shadow:0 8px 28px #3b9b6826;display:inline-flex;align-items:center;gap:9px;transition:.2s}.nav-download:hover,.button:hover{transform:translateY(-2px);filter:brightness(1.08)}.button.secondary{background:rgba(255,255,255,.035);border-color:var(--line);color:var(--text);box-shadow:none}.hero{min-height:610px;display:grid;grid-template-columns:1.02fr .98fr;align-items:center;gap:25px;padding:58px 0 76px;position:relative}.eyebrow{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(116,214,154,.2);background:rgba(116,214,154,.07);color:#a9e9bc;border-radius:30px;padding:7px 13px;font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase}.eyebrow:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 13px var(--green)}h1{font-size:clamp(48px,6vw,76px);line-height:1.02;letter-spacing:-4px;margin:24px 0 20px;font-weight:800}h1 em{font-style:normal;color:var(--green)}.hero-copy{max-width:550px;color:#aab9af;font-size:16px;line-height:1.8}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}.micro{display:flex;gap:22px;margin-top:32px;color:#82958a;font-size:11px}.micro b{color:#d7e6db;font-size:13px;display:block}.avatar-stage{height:490px;position:relative;display:grid;place-items:center;isolation:isolate}.avatar-stage:before{content:"";position:absolute;width:390px;height:390px;border-radius:50%;background:radial-gradient(circle,rgba(92,191,124,.22),rgba(47,106,69,.08) 48%,transparent 72%);filter:blur(12px);z-index:-1}.avatar-stage:after{content:"";position:absolute;width:340px;height:110px;bottom:24px;border-radius:50%;background:radial-gradient(ellipse,rgba(73,161,101,.23),transparent 70%);filter:blur(14px);z-index:-1}.avatar-frame{width:min(100%,460px);height:470px;position:relative}.avatar-frame canvas{width:100%;height:100%;display:block}.avatar-hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:10px;color:#789184;letter-spacing:1px;white-space:nowrap}.float-tag{position:absolute;border:1px solid var(--line);background:rgba(17,27,22,.78);backdrop-filter:blur(14px);padding:10px 14px;border-radius:12px;font-size:11px;color:#c8d9ce;box-shadow:0 15px 45px #0004}.float-tag strong{color:var(--green)}.tag-one{right:-5px;top:85px}.tag-two{left:0;bottom:78px}.section{padding:78px 0;border-top:1px solid var(--line)}.section-head{display:flex;justify-content:space-between;align-items:end;gap:25px;margin-bottom:30px}.kicker{font-size:10px;color:var(--green);font-weight:800;letter-spacing:2px;text-transform:uppercase}.section h2{font-size:clamp(30px,4vw,43px);letter-spacing:-1.8px;line-height:1.15;margin:9px 0 0}.section-head p{max-width:440px;color:var(--muted);margin:0}.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.feature,.card{background:linear-gradient(145deg,rgba(31,45,37,.78),rgba(17,25,21,.78));border:1px solid var(--line);border-radius:19px;padding:24px;backdrop-filter:blur(16px)}.feature-icon{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:rgba(116,214,154,.1);color:var(--green);font-size:20px;margin-bottom:18px}.feature h3{margin:0 0 8px;font-size:16px}.feature p{margin:0;color:var(--muted);font-size:13px}.catalog-intro{color:var(--muted);max-width:700px}.catalog{display:grid;grid-template-columns:repeat(2,1fr);gap:0 14px;margin-top:24px}.catalog .item{display:grid;grid-template-columns:14px 1fr auto auto;gap:12px;align-items:center;padding:13px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.018)}.catalog .item:nth-child(4n+1),.catalog .item:nth-child(4n+2){background:rgba(255,255,255,.035)}.dot{width:12px;height:12px;border-radius:4px;border:1px solid #ffffff30}.item-slot{color:#81958a;font-size:11px}.item-price{font-weight:800;font-size:12px;white-space:nowrap;color:#cdebd6}.note{margin-top:20px;padding:17px 20px;border-radius:14px;background:rgba(116,214,154,.07);border:1px solid rgba(116,214,154,.17);color:#b5cdbd;font-size:13px}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;counter-reset:step}.steps .card:before{counter-increment:step;content:"0" counter(step);display:block;color:var(--green);font-size:12px;font-weight:800;letter-spacing:1px;margin-bottom:14px}.steps h3{margin:0 0 7px}.steps p{margin:0;color:var(--muted);font-size:13px}.faq{display:grid;grid-template-columns:1fr 1fr;gap:12px}.faq .card{padding:19px}.faq h3{font-size:14px;margin:0 0 8px}.faq p{font-size:12px;color:var(--muted);margin:0}.legal{color:#7e9185;font-size:12px;max-width:800px}.footer{border-top:1px solid var(--line);padding:28px 0 42px;color:#7e9185;font-size:12px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}.footer a{color:#b8d9c2}.reveal{opacity:0;transform:translateY(18px);transition:opacity .7s,transform .7s}.reveal.visible{opacity:1;transform:none}
+@media(max-width:800px){nav{display:none}.hero{grid-template-columns:1fr;padding:65px 0 35px;gap:0}.hero-copy{font-size:14px}.avatar-stage{height:420px}.avatar-frame{height:410px}.tag-one{right:0}.tag-two{left:0}.feature-grid{grid-template-columns:1fr 1fr}.section-head{display:block}.section-head p{margin-top:12px}.steps{grid-template-columns:1fr}.catalog{grid-template-columns:1fr}.faq{grid-template-columns:1fr}}
+@media(max-width:480px){.wrap{width:min(100% - 30px,1160px)}.topbar{height:68px}.brand{font-size:17px}.nav-download{padding:10px 12px;font-size:11px}.hero{padding-top:48px}h1{font-size:49px;letter-spacing:-2.8px}.avatar-stage{height:350px}.avatar-frame{height:350px}.float-tag{font-size:9px;padding:8px 10px}.feature-grid{grid-template-columns:1fr}.section{padding:58px 0}.section h2{font-size:31px}.catalog .item{grid-template-columns:12px 1fr auto;gap:9px;padding:12px 9px}.item-slot{display:none}.micro{gap:15px}.footer{display:block}.footer span{display:block;margin-top:8px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head><body><div class="wrap">
+<header class="topbar"><a class="brand" href="#"><img src="icon.svg" alt=""><span>Hytpotchi</span></a><nav><a href="#features">Возможности</a><a href="#cosmetics">Косметика</a><a href="#start">Как начать</a><a href="#faq">FAQ</a></nav><a class="nav-download" href="https://github.com/Gussumus/hytpotchi/releases/latest">↓ Скачать</a></header>
+<section class="hero"><div><div class="eyebrow">Твой Minecraft. Твои правила.</div><h1>Играй.<br><em>Создавай.</em><br>Будь собой.</h1><p class="hero-copy">Hytpotchi — лаунчер Minecraft, в котором удобно собирать свои версии игры, находить моды, играть с друзьями и настраивать внешний вид персонажа.</p><div class="actions"><a class="button" href="https://github.com/Gussumus/hytpotchi/releases/latest">↓ Скачать для Windows</a><a class="button secondary" href="https://github.com/Gussumus/hytpotchi">Исходный код ↗</a></div><div class="micro"><div><b>Бесплатно</b>для Windows</div><div><b>Любые версии</b>Vanilla и модлоадеры</div><div><b>Свои образы</b>Скины и косметика</div></div></div>
+<div class="avatar-stage"><div class="avatar-frame" id="avatar"><div class="avatar-hint" id="avatar-hint">ТВОЙ ПЕРСОНАЖ · SLIM</div></div><div class="float-tag tag-one">✦ <strong>Твой стиль</strong><br>Скины и косметика</div><div class="float-tag tag-two">◉ <strong>Игра с друзьями</strong><br>Вместе проще</div></div></section>
+<section class="section reveal" id="features"><div class="section-head"><div><div class="kicker">Всё в одном месте</div><h2>Твой мир — твои правила</h2></div><p>Нужные инструменты для Minecraft собраны в одном лаунчере. Без лишней возни с настройками.</p></div><div class="feature-grid"><article class="feature"><div class="feature-icon">▦</div><h3>Любые версии</h3><p>Vanilla, Fabric, Forge, NeoForge и Quilt — выбирай версию и собирай игру под себя.</p></article><article class="feature"><div class="feature-icon">✧</div><h3>Моды и модпаки</h3><p>Находи моды и готовые сборки через Modrinth и устанавливай их в пару действий.</p></article><article class="feature"><div class="feature-icon">⌘</div><h3>Друзья рядом</h3><p>Открывай мир для друзей и играйте вместе через функции Hytpotchi.</p></article><article class="feature"><div class="feature-icon">◈</div><h3>Скины</h3><p>Настраивай внешний вид персонажа и показывай свой стиль другим игрокам.</p></article><article class="feature"><div class="feature-icon">⌁</div><h3>Java автоматически</h3><p>Лаунчер помогает установить подходящую Java для выбранной версии Minecraft.</p></article><article class="feature"><div class="feature-icon">♡</div><h3>Аккаунт Hytpotchi</h3><p>Создай аккаунт по нику и паролю прямо в лаунчере.</p></article></div></section><section class="section reveal" id="cosmetics">  <div class="section-head"><div><div class="kicker">Персонализация</div><h2>Косметика для персонажа</h2></div><p class="catalog-intro">Шапки, крылья, хвосты и другие детали. Выбирай образ прямо во вкладке «Косметика» лаунчера.</p></div>
   <p>Шапки, крылья, хвосты и другие украшения для вашего персонажа в Minecraft. Их видите вы и другие
   игроки Hytpotchi — в одиночных мирах, в мирах друзей и на серверах. Выбираются во вкладке
   «Косметика» лаунчера. Цены — от 29 до 149 ₽, 4 предмета — бесплатно.</p>
-  <div class="card">
+  <div class="catalog">
     <ul class="items">
         <li class="item">
           <span class="dot" style="background:#4e342e"></span>
@@ -247,33 +197,22 @@
     </ul>
   </div>
 
-  <h2>Как купить</h2>
-  <div class="card">
-    <ol class="steps">
-      <li>Скачайте и установите лаунчер, войдите в аккаунт Hytpotchi.</li>
-      <li>Откройте вкладку «Косметика» и выберите предмет.</li>
-      <li>Нажмите «Купить» — откроется страница оплаты ЮKassa. Оплата банковской картой или через СБП.</li>
-      <li>Сразу после оплаты предмет появляется на вашем аккаунте и надевается — он ваш навсегда.</li>
-    </ol>
-  </div>
-
-  <h2>Оплата и получение</h2>
-  <p>Цены указаны в рублях. Платёж принимает ЮKassa: данные карты вводятся на её странице, мы их не видим.</p>
-  <p>Косметика — цифровой товар: она начисляется на аккаунт Hytpotchi автоматически сразу после оплаты
-  и доступна во всех сборках, где лаунчер показывает косметику. Физической доставки нет.</p>
-
-  <h2>Возврат</h2>
-  <p>Если предмет не появился на аккаунте, оплата прошла дважды или по ошибке — напишите на
-  <a href="mailto:akiom31@gmail.com">akiom31@gmail.com</a> с ником и датой оплаты. Выдадим предмет или вернём деньги
-  тем же способом, которым вы платили, через ЮKassa.</p>
-
-  <h2>Контакты</h2>
-  <p>Почта для вопросов о покупках и лаунчере: <a href="mailto:akiom31@gmail.com">akiom31@gmail.com</a></p>
-  <p>Продавец — самозанятый, плательщик налога на профессиональный доход.</p>
-
-  <footer>
-    Hytpotchi не связан с Mojang Studios и Microsoft. Minecraft — товарный знак Mojang Synergies AB.
-  </footer>
-</main>
-</body>
-</html>
+<div class="note">Каталог для ознакомления. Покупка и выдача предметов доступны только при подключённой платёжной системе. 4 предмета бесплатные.</div></section>
+<section class="section reveal" id="start"><div class="section-head"><div><div class="kicker">Быстрый старт</div><h2>Начать играть просто</h2></div><p>Установи лаунчер и переходи к своей игре.</p></div><div class="steps"><article class="card"><h3>Скачай Hytpotchi</h3><p>Загрузи установщик для Windows со страницы релизов GitHub.</p></article><article class="card"><h3>Настрой игру</h3><p>Выбери версию Minecraft, загрузчик и нужные моды.</p></article><article class="card"><h3>Играй по-своему</h3><p>Запускай игру, настраивай скин и приглашай друзей.</p></article></div></section>
+<section class="section reveal" id="faq"><div class="section-head"><div><div class="kicker">Есть вопросы?</div><h2>Коротко о главном</h2></div></div><div class="faq"><article class="card"><h3>Hytpotchi бесплатный?</h3><p>Сам лаунчер доступен бесплатно. Внутри может быть дополнительная косметика.</p></article><article class="card"><h3>Какие версии Minecraft поддерживаются?</h3><p>Доступны Vanilla, Fabric, Forge, NeoForge и Quilt. Совместимость зависит от выбранной версии игры.</p></article><article class="card"><h3>Можно ли играть с друзьями?</h3><p>В лаунчере предусмотрены функции друзей и совместной игры.</p></article><article class="card"><h3>Где скачать исходный код?</h3><p>Проект открыт на GitHub — ссылка доступна в верхней части сайта.</p></article></div></section>
+<section class="section reveal"><div class="section-head"><div><div class="kicker">Поддержка</div><h2>Остались вопросы?</h2></div><p>Напиши нам — поможем разобраться с лаунчером, аккаунтом или покупками.</p></div><div class="card"><p>Почта: <a href="mailto:akiom31@gmail.com">akiom31@gmail.com</a></p><p class="legal">Продавец — самозанятый, плательщик налога на профессиональный доход. По вопросам возврата при оплате цифрового товара обращайтесь на почту с ником и датой платежа. Условия возврата рассматриваются индивидуально в соответствии с применимыми правилами.</p></div></section>
+<footer class="footer"><div>© Hytpotchi</div><span><a href="https://github.com/Gussumus/hytpotchi">GitHub</a> · <a href="https://github.com/Gussumus/hytpotchi/releases/latest">Скачать</a> · <a href="mailto:akiom31@gmail.com">Поддержка</a></span><p>Hytpotchi не связан с Mojang Studios и Microsoft. Minecraft — товарный знак Mojang Synergies AB.</p></footer></div>
+<script type="module">
+import * as skinview3d from 'https://cdn.jsdelivr.net/npm/skinview3d@3.4.2/+esm';
+const host=document.getElementById('avatar');
+try{
+ const viewer=new skinview3d.SkinViewer({canvas:document.createElement('canvas'),width:460,height:470,skin:'./skin.png'});
+ host.prepend(viewer.canvas);viewer.controls.enableZoom=false;viewer.controls.enablePan=false;viewer.controls.enableRotate=false;viewer.camera.position.set(28,18,48);viewer.playerObject.rotation.y=-.18;
+ viewer.animation=new skinview3d.IdleAnimation();viewer.animation.speed=0.65;
+ const hint=document.getElementById('avatar-hint');
+ viewer.loadSkin('./skin.png',{model:'slim'}).then(()=>{hint.remove()}).catch(()=>{hint.textContent='ДОБАВЬТЕ ФАЙЛ skin.png В КОРЕНЬ РЕПОЗИТОРИЯ'});
+ let targetX=0,targetY=0;window.addEventListener('pointermove',e=>{const r=host.getBoundingClientRect();targetX=((e.clientX-r.left)/r.width-.5)*.55;targetY=((e.clientY-r.top)/r.height-.5)*.28;});
+ function look(){viewer.playerObject.head.rotation.y+=(targetX-viewer.playerObject.head.rotation.y)*.045;viewer.playerObject.head.rotation.x+=(targetY-viewer.playerObject.head.rotation.x)*.045;requestAnimationFrame(look)}look();
+}catch(e){document.getElementById('avatar-hint').textContent='3D-ПЕРСОНАЖ ЗАГРУЗИТСЯ С ФАЙЛОМ skin.png'}
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');io.unobserve(e.target)}}),{threshold:.08});document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script></body></html>
