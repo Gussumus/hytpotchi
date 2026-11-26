@@ -246,27 +246,39 @@ try {
   const followCursor = () => {
     currentHeadY += (targetHeadY - currentHeadY) * 0.055;
     currentHeadX += (targetHeadX - currentHeadX) * 0.055;
-    viewer.playerObject.head.rotation.y = currentHeadY;
-    viewer.playerObject.head.rotation.x = currentHeadX;
+    viewer.playerObject.skin.head.rotation.y = currentHeadY;
+    viewer.playerObject.skin.head.rotation.x = currentHeadX;
     requestAnimationFrame(followCursor);
   };
   followCursor();
 
-  // Спокойная стойка: лёгкое покачивание рук и редкий приветственный взмах
-  // левой рукой. FunctionAnimation получает progress в секундах.
-  viewer.animation = new skinview3d.FunctionAnimation((player, progress) => {
-    const phase = progress % 9;
-    const fadeIn = Math.max(0, Math.min(1, (phase - 1.2) / 0.55));
-    const fadeOut = Math.max(0, Math.min(1, (4.2 - phase) / 0.65));
-    const smoothIn = fadeIn * fadeIn * (3 - 2 * fadeIn);
-    const smoothOut = fadeOut * fadeOut * (3 - 2 * fadeOut);
-    const raised = Math.min(smoothIn, smoothOut);
+  // Базовая idle-анимация skinview3d + отдельный процедурный взмах.
+  // Так idle и приветствие не перезаписывают друг друга.
+  viewer.animation = new skinview3d.IdleAnimation();
+  viewer.animation.speed = 1;
 
-    // Небольшая естественная подвижность, без ходьбы и вращения тела.
-    player.skin.leftArm.rotation.x = 1.35 * raised;
-    player.skin.leftArm.rotation.z = 0.08 + Math.sin(progress * 2.8) * 0.34 * raised;
-    player.skin.rightArm.rotation.z = -0.035 + Math.sin(progress * 1.4) * 0.018;
-    player.skin.body.position.y = -6 + Math.sin(progress * 1.7) * 0.045;
+  viewer.animation.addAnimation((player, progress) => {
+    const phase = progress % 11;
+    const startWave = 3.0;
+    const waveLength = 2.5;
+    const local = phase - startWave;
+    let wave = 0;
+
+    if (local >= 0 && local <= waveLength) {
+      const fadeIn = Math.min(1, local / 0.38);
+      const fadeOut = Math.min(1, (waveLength - local) / 0.42);
+      const fade = Math.max(0, Math.min(fadeIn, fadeOut));
+      wave = fade * fade * (3 - 2 * fade);
+    }
+
+    // Ненавязчивое дыхание и перенос веса, без ходьбы и вращения на месте.
+    player.position.y = Math.sin(progress * 1.8) * 0.12;
+    player.skin.body.rotation.z = Math.sin(progress * 1.15) * 0.018;
+
+    // Левая рука плавно поднимается, затем делает несколько взмахов.
+    player.skin.leftArm.rotation.x = 1.18 * wave;
+    player.skin.leftArm.rotation.z =
+      0.045 + Math.sin(progress * 10.5) * 0.34 * wave;
   });
 } catch (error) {
   console.error('Hytpotchi avatar error:', error);
