@@ -23,7 +23,7 @@ jobs:
       # Приватный ключ подписи обновлений — в Secrets
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +35,6 @@ jobs:
           node-version: 22
           cache: npm
 
-
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
@@ -44,22 +43,20 @@ jobs:
 
       - run: npm ci
 
-      # Сначала явно собираем frontend и проверяем файл, который Tauri обязан встроить.
-      # launcher.html через vite.config.ts должен дать dist/index.html.
+      # Сборка создаёт dist/launcher.html и совместимый для Tauri dist/index.html.
       - name: Сборка и проверка интерфейса лаунчера
         shell: pwsh
         run: |
           npm run build
           if (!(Test-Path "dist/index.html" -PathType Leaf)) {
-            Write-Error "Vite не создал dist/index.html. Сборка установщика остановлена."
+            Write-Error "Сборка не создала dist/index.html для Tauri."
             exit 1
           }
-          $entry = Get-Item "dist/index.html"
-          if ($entry.Length -le 0) {
-            Write-Error "dist/index.html пустой. Сборка установщика остановлена."
+          if ((Get-Item "dist/index.html").Length -le 0) {
+            Write-Error "dist/index.html пустой."
             exit 1
           }
-          Write-Host "Tauri frontend entry OK: dist/index.html ($($entry.Length) bytes)"
+          Write-Host "Tauri frontend entry OK: dist/index.html"
 
       - name: Проверка ключа подписи
         shell: bash
