@@ -212,11 +212,22 @@ canvas.setAttribute('aria-label', '3D-персонаж Hytpotchi');
 
 let viewer;
 let raf = 0;
+let waveUntil = 0;
 let pointerX = 0;
 let pointerY = 0;
-let currentX = 0;
-let currentY = 0;
-let waveTimer;
+let lookX = 0;
+let lookY = 0;
+let glanceX = 0;
+let glanceY = 0;
+let nextGlance = 0;
+let nextBlink = 0;
+let blinkStarted = 0;
+
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const smooth = (a, b, x) => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
 
 try {
   viewer = new skinview3d.SkinViewer({
@@ -225,65 +236,106 @@ try {
     height: 470,
     skin: './skin.png',
     model: 'slim',
-    fov: 38,
-    zoom: 0.82
+    fov: 34,
+    zoom: 0.86
   });
+
   host.prepend(canvas);
   viewer.controls.enableZoom = false;
   viewer.controls.enablePan = false;
   viewer.controls.enableRotate = false;
   viewer.autoRotate = false;
-  viewer.camera.position.set(28, 18, 48);
-  viewer.playerObject.rotation.y = -0.12;
-  viewer.globalLight.intensity = 2.6;
-  viewer.cameraLight.intensity = 0.65;
-
-  viewer.animation = new skinview3d.IdleAnimation();
-  viewer.animation.speed = 0.7;
+  viewer.camera.position.set(24, 16, 52);
+  viewer.playerObject.rotation.y = -0.10;
+  viewer.globalLight.intensity = 2.5;
+  viewer.cameraLight.intensity = 0.7;
 
   await viewer.loadSkin('./skin.png', { model: 'slim' });
   hint?.remove();
 
-  const heroButtons = document.querySelectorAll('.hero a, .hero .btn, a[href*="Hytpotchi_1.5.0_x64-setup.exe"]');
-  const playReaction = () => {
-    if (!viewer) return;
-    viewer.animation = new skinview3d.WaveAnimation();
-    viewer.animation.speed = 0.85;
-    clearTimeout(waveTimer);
-    waveTimer = setTimeout(() => {
-      if (viewer) {
-        viewer.animation = new skinview3d.IdleAnimation();
-        viewer.animation.speed = 0.7;
-      }
-    }, 1700);
-  };
-  heroButtons.forEach(button => {
-    button.addEventListener('pointerenter', playReaction);
-    button.addEventListener('click', playReaction);
+  // Спокойная idle-анимация: лёгкое дыхание, перенос веса и редкий взмах левой рукой.
+  viewer.animation = new skinview3d.FunctionAnimation((player, t) => {
+    const now = performance.now() / 1000;
+    const skin = player.skin;
+    const cycle = t % 19;
+    const automaticWave = smooth(8.2, 8.85, cycle) * (1 - smooth(10.7, 11.35, cycle));
+    const requestedWave = now < waveUntil ? 1 : 0;
+    const wave = Math.max(automaticWave, requestedWave);
+    const waveTime = requestedWave ? now : cycle - 8.85;
+
+    // Дыхание и почти незаметное покачивание корпуса.
+    skin.body.position.y = -6 + Math.sin(t * 1.25) * 0.13;
+    skin.body.rotation.z = Math.sin(t * 0.62) * 0.012;
+    player.position.y = Math.sin(t * 1.25) * 0.10;
+    player.rotation.y = -0.10 + Math.sin(t * 0.42) * 0.025;
+
+    // Руки расслаблены, двигаются совсем немного.
+    skin.rightArm.rotation.x = Math.sin(t * 1.25 + 0.7) * 0.025;
+    skin.rightArm.rotation.z = -0.045 + Math.sin(t * 0.8) * 0.012;
+    skin.leftArm.rotation.x = -2.78 * wave;
+    skin.leftArm.rotation.z = 0.045 + wave * (0.18 + Math.sin(waveTime * 10) * 0.30);
+
+    // Ноги остаются на месте, только лёгкий перенос веса.
+    skin.leftLeg.rotation.x = Math.sin(t * 0.8) * 0.012;
+    skin.rightLeg.rotation.x = -Math.sin(t * 0.8) * 0.012;
   });
 
-  const trackPointer = event => {
-    const rect = host.getBoundingClientRect();
-    pointerX = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2));
-    pointerY = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
+  const triggerWave = () => {
+    waveUntil = performance.now() / 1000 + 2.8;
   };
-  host.addEventListener('pointermove', trackPointer);
-  host.addEventListener('pointerleave', () => { pointerX = 0; pointerY = 0; });
+
+  document.querySelectorAll('.hero a, .nav-download').forEach(button => {
+    button.addEventListener('pointerenter', triggerWave);
+    button.addEventListener('click', triggerWave);
+  });
+
+  const updatePointer = event => {
+    const rect = host.getBoundingClientRect();
+    pointerX = clamp(((event.clientX - rect.left) / rect.width - 0.5) * 2, -1, 1);
+    pointerY = clamp(((event.clientY - rect.top) / rect.height - 0.5) * 2, -1, 1);
+  };
   window.addEventListener('pointermove', event => {
     const rect = host.getBoundingClientRect();
-    const inside = event.clientX >= rect.left && event.clientX <= rect.right &&
-      event.clientY >= rect.top && event.clientY <= rect.bottom;
-    if (inside) trackPointer(event);
+    if (event.clientX >= rect.left && event.clientX <= rect.right &&
+        event.clientY >= rect.top && event.clientY <= rect.bottom) {
+      updatePointer(event);
+    } else {
+      pointerX = 0;
+      pointerY = 0;
+    }
   });
 
-  const animateLook = () => {
-    currentX += (pointerX * 0.42 - currentX) * 0.055;
-    currentY += (pointerY * 0.2 - currentY) * 0.055;
-    viewer.playerObject.head.rotation.y = currentX;
-    viewer.playerObject.head.rotation.x = currentY;
-    raf = requestAnimationFrame(animateLook);
+  const animateDetails = () => {
+    const now = performance.now() / 1000;
+    const head = viewer.playerObject.skin.head;
+
+    // Персонаж плавно переводит взгляд вслед за курсором и иногда смотрит по сторонам.
+    if (now > nextGlance) {
+      glanceX = (Math.random() - 0.5) * 0.20;
+      glanceY = (Math.random() - 0.5) * 0.10;
+      nextGlance = now + 2.8 + Math.random() * 3.8;
+    }
+    lookX += (pointerX * 0.30 + glanceX - lookX) * 0.045;
+    lookY += (pointerY * 0.16 + glanceY - lookY) * 0.045;
+    head.rotation.y = lookX;
+    head.rotation.x = lookY;
+
+    // Короткое моргание через лёгкое сжатие головы по вертикали.
+    if (now > nextBlink) {
+      blinkStarted = now;
+      nextBlink = now + 3.2 + Math.random() * 3.5;
+    }
+    const blinkTime = now - blinkStarted;
+    const blink = blinkTime >= 0 && blinkTime < 0.16
+      ? Math.sin((blinkTime / 0.16) * Math.PI)
+      : 0;
+    head.scale.y = 1 - blink * 0.075;
+
+    raf = requestAnimationFrame(animateDetails);
   };
-  animateLook();
+  nextGlance = performance.now() / 1000 + 2;
+  nextBlink = performance.now() / 1000 + 3.5;
+  animateDetails();
 } catch (error) {
   console.error('Hytpotchi avatar error:', error);
   if (hint) hint.textContent = 'Не удалось загрузить 3D-персонажа. Проверь подключение и skin.png.';
@@ -299,7 +351,6 @@ document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
 window.addEventListener('pagehide', () => {
   cancelAnimationFrame(raf);
-  clearTimeout(waveTimer);
   viewer?.dispose();
 });
 </script></body></html>
