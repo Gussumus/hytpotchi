@@ -27,13 +27,13 @@ a{color:inherit;text-decoration:none}.wrap{width:min(1160px,calc(100% - 44px));m
 .preview-tile{border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:13px;padding:15px;min-height:92px}
 .preview-tile span{display:block;color:var(--green);font-size:20px;margin-bottom:7px}.preview-tile b{font-size:12px}.preview-tile small{display:block;color:var(--muted);font-size:10px;margin-top:3px}
 .preview-action{display:inline-flex;margin-top:18px;padding:9px 14px;border-radius:9px;background:#70d394;color:#08140d;font-weight:800;font-size:11px}
-.cosmetic-showcase{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:28px 0 30px}
+.cosmetic-lab{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;align-items:start;margin-top:26px}.cosmetic-preview{position:sticky;top:20px;border:1px solid rgba(182,243,201,.16);border-radius:19px;background:radial-gradient(circle at 50% 35%,rgba(116,214,154,.13),transparent 62%),linear-gradient(145deg,#17221b,#0d1511);padding:14px;text-align:center}.cosmetic-preview h3{font-size:14px;margin:5px 0 0}.cosmetic-preview p{font-size:11px;color:var(--muted);margin:3px 0 0}.cosmetic-avatar{height:300px}.cosmetic-avatar canvas{width:100%;height:100%;display:block}.equipped-label{font-size:11px;color:#baf2c9;margin-top:10px;min-height:18px}.cosmetic-showcase{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:0 0 24px}.cosmetic-card{cursor:pointer;transition:transform .18s,border-color .18s,background .18s}.cosmetic-card:hover{transform:translateY(-3px);border-color:rgba(116,214,154,.5)}.cosmetic-card.selected{border-color:var(--green);background:linear-gradient(145deg,rgba(55,112,72,.48),#111914);box-shadow:0 0 0 1px rgba(116,214,154,.16),0 12px 35px #0003}.cosmetic-card:focus-visible,.catalog .item:focus-visible{outline:2px solid var(--green);outline-offset:3px}.catalog .item{cursor:pointer;transition:background .18s,border-color .18s}.catalog .item:hover,.catalog .item.selected{background:rgba(116,214,154,.12);border-color:rgba(116,214,154,.35)}
 .cosmetic-card{position:relative;min-height:170px;overflow:hidden;border:1px solid var(--line);border-radius:17px;padding:16px;background:radial-gradient(circle at 50% 25%,rgba(116,214,154,.13),transparent 65%),linear-gradient(145deg,#1b2a21,#111914)}
 .cosmetic-art{height:82px;display:grid;place-items:center;font-size:48px;filter:drop-shadow(0 10px 16px #0007)}
 .cosmetic-card b{font-size:13px}.cosmetic-card small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
 .cosmetic-price{position:absolute;right:12px;top:12px;color:#baf2c9;font-size:10px;font-weight:800;background:#6acb8b18;border:1px solid #6acb8b30;border-radius:20px;padding:5px 8px}
-@media(max-width:800px){.preview-shell{grid-template-columns:145px 1fr}.preview-side{padding:16px 9px}.preview-main{padding:19px 16px}.cosmetic-showcase{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:520px){.preview-shell{grid-template-columns:1fr}.preview-side{display:flex;align-items:center;gap:4px;padding:9px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}.preview-brand{display:none}.preview-tab{width:auto;white-space:nowrap;padding:9px}.preview-main{padding:16px}.preview-game{grid-template-columns:1fr 1fr}.cosmetic-showcase{gap:8px}.cosmetic-card{padding:12px;min-height:150px}.cosmetic-art{height:72px;font-size:40px}}
+@media(max-width:800px){.preview-shell{grid-template-columns:145px 1fr}.preview-side{padding:16px 9px}.preview-main{padding:19px 16px}.cosmetic-lab{grid-template-columns:240px minmax(0,1fr);gap:14px}.cosmetic-avatar{height:260px}.cosmetic-showcase{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.cosmetic-lab{grid-template-columns:1fr}.cosmetic-preview{position:relative;top:auto}.cosmetic-avatar{height:280px}.preview-shell{grid-template-columns:1fr}.preview-side{display:flex;align-items:center;gap:4px;padding:9px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}.preview-brand{display:none}.preview-tab{width:auto;white-space:nowrap;padding:9px}.preview-main{padding:16px}.preview-game{grid-template-columns:1fr 1fr}.cosmetic-showcase{gap:8px}.cosmetic-card{padding:12px;min-height:150px}.cosmetic-art{height:72px;font-size:40px}}
 
 @media(max-width:800px){nav{display:none}.hero{grid-template-columns:1fr;padding:65px 0 35px;gap:0}.hero-copy{font-size:14px}.avatar-stage{height:420px}.avatar-frame{height:410px}.tag-one{right:0}.tag-two{left:0}.feature-grid{grid-template-columns:1fr 1fr}.section-head{display:block}.section-head p{margin-top:12px}.steps{grid-template-columns:1fr}.catalog{grid-template-columns:1fr}.faq{grid-template-columns:1fr}}
 @media(max-width:480px){.wrap{width:min(100% - 30px,1160px)}.topbar{height:68px}.brand{font-size:17px}.nav-download{padding:10px 12px;font-size:11px}.hero{padding-top:48px}h1{font-size:49px;letter-spacing:-2.8px}.avatar-stage{height:350px}.avatar-frame{height:350px}.float-tag{font-size:9px;padding:8px 10px}.feature-grid{grid-template-columns:1fr}.section{padding:58px 0}.section h2{font-size:31px}.catalog .item{grid-template-columns:12px 1fr auto;gap:9px;padding:12px 9px}.item-slot{display:none}.micro{gap:15px}.footer{display:block}.footer span{display:block;margin-top:8px}}
@@ -68,13 +68,24 @@ a{color:inherit;text-decoration:none}.wrap{width:min(1160px,calc(100% - 44px));m
   <p>Шапки, крылья, хвосты и другие украшения для вашего персонажа в Minecraft. Их видите вы и другие
   игроки Hytpotchi — в одиночных мирах, в мирах друзей и на серверах. Выбираются во вкладке
   «Косметика» лаунчера. Цены — от 29 до 149 ₽, 4 предмета — бесплатно.</p>
-  <div class="cosmetic-showcase">
-    <article class="cosmetic-card"><span class="cosmetic-price">149 ₽</span><div class="cosmetic-art">🪽</div><b>Крылья ангела</b><small>Украшение на спину</small></article>
-    <article class="cosmetic-card"><span class="cosmetic-price">99 ₽</span><div class="cosmetic-art">👑</div><b>Корона</b><small>Королевский образ</small></article>
-    <article class="cosmetic-card"><span class="cosmetic-price">69 ₽</span><div class="cosmetic-art">🦊</div><b>Лисий хвост</b><small>Украшение для образа</small></article>
-    <article class="cosmetic-card"><span class="cosmetic-price">79 ₽</span><div class="cosmetic-art">🎩</div><b>Цилиндр</b><small>Классика на каждый день</small></article>
-    <article class="cosmetic-card"><span class="cosmetic-price">129 ₽</span><div class="cosmetic-art">🐉</div><b>Хвост дракона</b><small>Добавь немного характера</small></article>
-    <article class="cosmetic-card"><span class="cosmetic-price">Бесплатно</span><div class="cosmetic-art">🎧</div><b>Наушники</b><small>Бесплатный предмет</small></article>
+  <div class="cosmetic-lab">
+    <aside class="cosmetic-preview">
+      <div class="kicker">Примерка в 3D</div>
+      <div class="cosmetic-avatar" id="cosmetic-avatar"></div>
+      <h3>Твой текущий скин</h3>
+      <p>Нажми на предмет — он появится на персонаже</p>
+      <div class="equipped-label" id="equipped-label">Ничего не надето</div>
+    </aside>
+    <div>
+      <div class="cosmetic-showcase">
+        <article class="cosmetic-card" data-cosmetic="wings"><span class="cosmetic-price">149 ₽</span><div class="cosmetic-art">🪽</div><b>Крылья ангела</b><small>Украшение на спину</small></article>
+        <article class="cosmetic-card" data-cosmetic="crown"><span class="cosmetic-price">99 ₽</span><div class="cosmetic-art">👑</div><b>Корона</b><small>Королевский образ</small></article>
+        <article class="cosmetic-card" data-cosmetic="fox-tail"><span class="cosmetic-price">69 ₽</span><div class="cosmetic-art">🦊</div><b>Лисий хвост</b><small>Украшение для образа</small></article>
+        <article class="cosmetic-card" data-cosmetic="top-hat"><span class="cosmetic-price">79 ₽</span><div class="cosmetic-art">🎩</div><b>Цилиндр</b><small>Классика на каждый день</small></article>
+        <article class="cosmetic-card" data-cosmetic="dragon-tail"><span class="cosmetic-price">129 ₽</span><div class="cosmetic-art">🐉</div><b>Хвост дракона</b><small>Добавь немного характера</small></article>
+        <article class="cosmetic-card" data-cosmetic="headphones"><span class="cosmetic-price">Бесплатно</span><div class="cosmetic-art">🎧</div><b>Наушники</b><small>Бесплатный предмет</small></article>
+      </div>
+    </div>
   </div>
   <div class="catalog">
     <ul class="items">
@@ -256,8 +267,112 @@ a{color:inherit;text-decoration:none}.wrap{width:min(1160px,calc(100% - 44px));m
 <footer class="footer"><div>© Hytpotchi</div><span><a href="https://github.com/Gussumus/hytpotchi">GitHub</a> · <a href="https://github.com/Gussumus/hytpotchi/releases/download/v1.5.0/Hytpotchi_1.5.0_x64-setup.exe">Скачать</a> · <a href="mailto:akiom31@gmail.com">Поддержка</a></span><p>Hytpotchi не связан с Mojang Studios и Microsoft. Minecraft — товарный знак Mojang Synergies AB.</p></footer></div>
 <script type="module">
 import * as skinview3d from 'https://cdn.jsdelivr.net/npm/skinview3d@3.4.2/+esm';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.179.1/+esm';
 
-const host = document.getElementById('avatar');
+const cosmeticHost = document.getElementById('cosmetic-avatar');
+let cosmeticViewer = null;
+const equippedLabel = document.getElementById('equipped-label');
+const equippedObjects = [];
+const cosmeticNames = {
+  wings: 'Крылья ангела', crown: 'Корона', 'fox-tail': 'Лисий хвост',
+  'top-hat': 'Цилиндр', 'dragon-tail': 'Хвост дракона', headphones: 'Наушники'
+};
+function makeMaterial(color, metalness = 0.05, roughness = 0.55) {
+  return new THREE.MeshStandardMaterial({ color, metalness, roughness });
+}
+function addBox(parent, material, size, position, rotation = [0, 0, 0]) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+  mesh.position.set(...position);
+  mesh.rotation.set(...rotation);
+  parent.add(mesh);
+  return mesh;
+}
+function clearCosmetic(viewer) {
+  const root = viewer?.playerObject?.skin;
+  if (!root) return;
+  const old = root.getObjectByName('hytpotchi-cosmetic');
+  if (old) {
+    old.traverse(object => {
+      if (object.geometry) object.geometry.dispose();
+      if (object.material) {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        materials.forEach(material => material.dispose());
+      }
+    });
+    root.remove(old);
+  }
+}
+function applyCosmetic(viewer, type) {
+  const skin = viewer?.playerObject?.skin;
+  if (!skin) return;
+  clearCosmetic(viewer);
+  if (!type) return;
+  const group = new THREE.Group();
+  group.name = 'hytpotchi-cosmetic';
+  const gold = makeMaterial('#f4c84a', 0.72, 0.28);
+  const goldLight = makeMaterial('#ffe58a', 0.55, 0.3);
+  const dark = makeMaterial('#202a31', 0.15, 0.35);
+  const white = makeMaterial('#f4f0e8', 0.08, 0.48);
+  const orange = makeMaterial('#d9782d', 0.05, 0.55);
+  if (type === 'crown') {
+    const base = new THREE.Mesh(new THREE.BoxGeometry(8.7, 1.1, 8.7), gold);
+    base.position.set(0, 8.45, 0); group.add(base);
+    [-3, -1, 1, 3].forEach((x, i) => {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.85, 2.8, 4), i % 2 ? goldLight : gold);
+      spike.position.set(x, 10.1, 0); group.add(spike);
+    });
+    addBox(group, goldLight, [1.2, 1.2, 0.35], [0, 8.9, 4.5]);
+  } else if (type === 'top-hat') {
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.2, 0.55, 4), dark);
+    brim.position.y = 8.35; brim.rotation.y = Math.PI / 4; group.add(brim);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(6.2, 4.1, 6.2), dark);
+    top.position.y = 10.5; group.add(top);
+    addBox(group, makeMaterial('#9b3030'), [6.25, 0.8, 6.25], [0, 9.2, 0]);
+  } else if (type === 'headphones') {
+    addBox(group, dark, [1.5, 5.2, 5.2], [-4.8, 4.4, 0]);
+    addBox(group, dark, [1.5, 5.2, 5.2], [4.8, 4.4, 0]);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.55, 6, 20, Math.PI), dark);
+    band.rotation.z = Math.PI; band.position.set(0, 5.5, 0); group.add(band);
+    addBox(group, makeMaterial('#70d394'), [1.7, 2.7, 3.4], [-5.4, 4.3, 0]);
+    addBox(group, makeMaterial('#70d394'), [1.7, 2.7, 3.4], [5.4, 4.3, 0]);
+  } else if (type === 'wings') {
+    const wing = (side) => {
+      const w = new THREE.Group(); w.position.set(side * 3.7, -1, -2.8); w.rotation.z = side * -0.22; group.add(w);
+      for (let i = 0; i < 4; i++) {
+        const feather = new THREE.Mesh(new THREE.BoxGeometry(3.4, 5.5, 0.75), i % 2 ? white : makeMaterial('#d8e4df'));
+        feather.position.set(side * (1.2 + i * 1.15), -i * 1.1, -i * 0.15);
+        feather.rotation.z = side * (0.18 + i * 0.12); w.add(feather);
+      }
+    };
+    wing(-1); wing(1);
+    const mount = new THREE.Mesh(new THREE.BoxGeometry(3, 5, 1.2), goldLight);
+    mount.position.set(0, -1, -3.5); group.add(mount);
+  } else if (type === 'fox-tail' || type === 'dragon-tail') {
+    const tail = new THREE.Group(); tail.position.set(0, -9, -2.8); tail.rotation.x = -0.25; group.add(tail);
+    const segments = type === 'fox-tail' ? 4 : 5;
+    for (let i = 0; i < segments; i++) {
+      const size = 3.3 - i * 0.42;
+      const segment = new THREE.Mesh(new THREE.BoxGeometry(size, 3.5, size), type === 'fox-tail' ? orange : (i % 2 ? makeMaterial('#27734b') : makeMaterial('#3b9b68')));
+      segment.position.set(0, -i * 2.7, -i * 0.85);
+      segment.rotation.x = -0.18; tail.add(segment);
+    }
+    if (type === 'fox-tail') {
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3, 2.5), white);
+      tip.position.set(0, -segments * 2.7, -segments * 0.85); tail.add(tip);
+    } else {
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3, 4), makeMaterial('#f1c64b'));
+      tip.position.set(0, -segments * 2.7 - 1, -segments * 0.85); tail.add(tip);
+    }
+  }
+  skin.add(group);
+}
+function selectCosmetic(type, card) {
+  document.querySelectorAll('.cosmetic-card,.catalog .item').forEach(el => el.classList.remove('selected'));
+  if (card) card.classList.add('selected');
+  if (cosmeticViewer) applyCosmetic(cosmeticViewer, type);
+  if (equippedLabel) equippedLabel.textContent = type ? 'Надето: ' + (cosmeticNames[type] || type) : 'Ничего не надето';
+}
+
 const hint = document.getElementById('avatar-hint');
 const canvas = document.createElement('canvas');
 
@@ -304,6 +419,48 @@ try {
 } catch (error) {
   console.error('Hytpotchi avatar error:', error);
   if (hint) hint.textContent = 'Не удалось загрузить персонажа (skin.png).';
+}
+
+// Отдельное окно примерки использует ту же исходную текстуру скина.
+if (cosmeticHost) {
+  try {
+    const cosmeticCanvas = document.createElement('canvas');
+    cosmeticViewer = new skinview3d.SkinViewer({ canvas: cosmeticCanvas, width: 300, height: 300, skin: './skin.png' });
+    cosmeticHost.appendChild(cosmeticCanvas);
+    cosmeticViewer.controls.enableZoom = false;
+    cosmeticViewer.controls.enablePan = false;
+    cosmeticViewer.controls.enableRotate = false;
+    cosmeticViewer.camera.position.set(28, 18, 48);
+    cosmeticViewer.playerObject.rotation.y = -0.18;
+    await cosmeticViewer.loadSkin('./skin.png', { model: 'slim' });
+    cosmeticViewer.animation = new skinview3d.IdleAnimation();
+    cosmeticViewer.animation.speed = 0.7;
+  } catch (error) {
+    console.error('Hytpotchi cosmetic preview error:', error);
+    if (equippedLabel) equippedLabel.textContent = 'Не удалось загрузить предпросмотр';
+  }
+}
+document.querySelectorAll('.cosmetic-card[data-cosmetic]').forEach(card => {
+  card.addEventListener('click', () => {
+    const type = card.dataset.cosmetic;
+    const alreadySelected = card.classList.contains('selected');
+    selectCosmetic(alreadySelected ? null : type, alreadySelected ? null : card);
+  });
+});
+document.querySelectorAll('.catalog .item').forEach(item => {
+  item.tabIndex = 0;
+  item.setAttribute('role', 'button');
+  const name = item.querySelector('.item-name')?.textContent?.trim() || '';
+  let type = 'crown';
+  if (/крылья/i.test(name)) type = 'wings';
+  else if (/хвост/i.test(name)) type = /лисий|кошачий/i.test(name) ? 'fox-tail' : 'dragon-tail';
+  else if (/наушники/i.test(name)) type = 'headphones';
+  else if (/цилиндр|шляпа|шап|кепка|колпак|бини|венок|корона|рога|ушки|шлем/i.test(name)) type = 'top-hat';
+  else if (/рюкзак|колчан|гитара|меч/i.test(name)) type = 'wings';
+  item.addEventListener('click', () => selectCosmetic(type, item));
+  item.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCosmetic(type, item); }
+  });
 }
 
 const previewPanels = {
