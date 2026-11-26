@@ -213,6 +213,24 @@ export function Settings() {
           </div>
         )}
       </section>
+
+      <section className="settings-block">
+        <div className="settings-title">
+          <div>
+            <h3>Лицензии 3D-моделей</h3>
+            <p className="muted small">
+              Некоторые модели косметики основаны на работах авторов, распространяемых по лицензии Creative Commons Attribution 4.0.
+            </p>
+          </div>
+        </div>
+        <div className="service-list">
+          <span className="muted small">Hiking Backpack — Flok_ · CC BY 4.0 · <a href="https://sketchfab.com/3d-models/a49cffb713294180ae9005309922e969" target="_blank" rel="noreferrer">Источник</a></span>
+          <span className="muted small">Accessory Fox Ears — state_L · CC BY 4.0 · <a href="https://sketchfab.com/3d-models/82f5a2d637cd462795ca33168f2fe1b0" target="_blank" rel="noreferrer">Источник</a></span>
+          <span className="muted small">Minecraft Crown — Olaf4549 · CC BY 4.0 · <a href="https://sketchfab.com/3d-models/88db58200f4d44798adb49a9b48a5579" target="_blank" rel="noreferrer">Источник</a></span>
+          <span className="muted small">Horn Accessory — state_L · CC BY 4.0 · <a href="https://sketchfab.com/3d-models/4532c2f82f0d4760845c8fe4242e042c" target="_blank" rel="noreferrer">Источник</a></span>
+          <span className="muted small">Voxel top hat — Rovani · CC BY 4.0 · <a href="https://sketchfab.com/3d-models/ea9a1d9276584ebda27f3db37fe9c52e" target="_blank" rel="noreferrer">Источник</a></span>
+        </div>
+      </section>
     </div>
   )
 }
