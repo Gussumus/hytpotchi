@@ -108,7 +108,7 @@ a{color:inherit;text-decoration:none}.wrap{width:min(1160px,calc(100% - 44px));m
 <section class="section reveal" id="cosmetics">  <div class="section-head"><div><div class="kicker">Персонализация</div><h2>Косметика для персонажа</h2></div><p class="catalog-intro">Шапки, крылья, хвосты и другие детали. Выбирай образ прямо во вкладке «Косметика» лаунчера.</p></div>
   <p>Шапки, крылья, хвосты и другие украшения для вашего персонажа в Minecraft. Их видите вы и другие
   игроки Hytpotchi — в одиночных мирах, в мирах друзей и на серверах. Выбираются во вкладке
-  «Косметика» лаунчера. Цены — от 69 до 129 ₽, 2 предмета — бесплатно.</p>
+  «Косметика» лаунчера. Все 28 предметов доступны для примерки; 5 из них бесплатные.</p>
   <div class="cosmetic-lab">
     <aside class="cosmetic-preview">
       <div class="kicker">Примерка в 3D</div>
@@ -118,17 +118,10 @@ a{color:inherit;text-decoration:none}.wrap{width:min(1160px,calc(100% - 44px));m
       <div class="equipped-label" id="equipped-label">Ничего не надето</div>
     </aside>
     <div>
-      <div class="cosmetic-showcase">
-        <article class="cosmetic-card" data-cosmetic="wings"><span class="cosmetic-price">99 ₽</span><div class="cosmetic-art">🪽</div><b>Крылья ангела</b><small>Украшение на спину</small></article>
-        <article class="cosmetic-card" data-cosmetic="crown"><span class="cosmetic-price">69 ₽</span><div class="cosmetic-art">👑</div><b>Корона</b><small>Королевский образ</small></article>
-        <article class="cosmetic-card" data-cosmetic="fox-tail"><span class="cosmetic-price">79 ₽</span><div class="cosmetic-art">🦊</div><b>Лисий хвост</b><small>Украшение для образа</small></article>
-        <article class="cosmetic-card" data-cosmetic="top-hat"><span class="cosmetic-price">129 ₽</span><div class="cosmetic-art">🎩</div><b>Цилиндр</b><small>Классика на каждый день</small></article>
-        <article class="cosmetic-card" data-cosmetic="dragon-tail"><span class="cosmetic-price">Бесплатно</span><div class="cosmetic-art">🐉</div><b>Хвост дракона</b><small>Добавь немного характера</small></article>
-        <article class="cosmetic-card" data-cosmetic="headphones"><span class="cosmetic-price">Бесплатно</span><div class="cosmetic-art">🎧</div><b>Наушники</b><small>Бесплатный предмет</small></article>
-      </div>
+      <div class="cosmetic-showcase" id="cosmetic-showcase" aria-live="polite"></div>
     </div>
   </div>
-  <div class="note">Каталог для ознакомления. Покупка и выдача предметов доступны только при подключённой платёжной системе. 2 предмета бесплатные.</div></section>
+  <div class="note">Каталог для ознакомления. Покупка и выдача предметов доступны только при подключённой платёжной системе. 5 предметов бесплатные.</div></section>
 <section class="section reveal" id="start"><div class="section-head"><div><div class="kicker">Быстрый старт</div><h2>Начать играть просто</h2></div><p>Установи лаунчер и переходи к своей игре.</p></div><div class="steps"><article class="card"><h3>Скачай Hytpotchi</h3><p>Загрузи установщик для Windows со страницы релизов GitHub.</p></article><article class="card"><h3>Настрой игру</h3><p>Выбери версию Minecraft, загрузчик и нужные моды.</p></article><article class="card"><h3>Играй по-своему</h3><p>Запускай игру, настраивай скин и приглашай друзей.</p></article></div></section>
 <section class="section reveal" id="faq"><div class="section-head"><div><div class="kicker">Есть вопросы?</div><h2>Коротко о главном</h2></div></div><div class="faq"><article class="card"><h3>Hytpotchi бесплатный?</h3><p>Сам лаунчер доступен бесплатно. Внутри может быть дополнительная косметика.</p></article><article class="card"><h3>Какие версии Minecraft поддерживаются?</h3><p>Доступны Vanilla, Fabric, Forge, NeoForge и Quilt. Совместимость зависит от выбранной версии игры.</p></article><article class="card"><h3>Можно ли играть с друзьями?</h3><p>В лаунчере предусмотрены функции друзей и совместной игры.</p></article><article class="card"><h3>Где скачать исходный код?</h3><p>Проект открыт на GitHub — ссылка доступна в верхней части сайта.</p></article></div></section>
 <section class="section reveal"><div class="section-head"><div><div class="kicker">Поддержка</div><h2>Остались вопросы?</h2></div><p>Напиши нам — поможем разобраться с лаунчером, аккаунтом или покупками.</p></div><div class="card"><p>Почта: <a href="mailto:akiom31@gmail.com">akiom31@gmail.com</a></p><p class="legal">Продавец — самозанятый, плательщик налога на профессиональный доход. По вопросам возврата при оплате цифрового товара обращайтесь на почту с ником и датой платежа. Условия возврата рассматриваются индивидуально в соответствии с применимыми правилами.</p></div></section>
@@ -499,24 +492,26 @@ const cosmeticCatalog=await catalogResponse.json();
 const cosmeticById=new Map(cosmeticCatalog.items.map(x=>[x.id,x]));
 const normName=s=>(s||'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^а-яa-z0-9]+/g,' ').trim();
 const cosmeticByName=new Map(cosmeticCatalog.items.map(x=>[normName(x.name),x]));
-const featuredAliases={wings:'angel_wings','fox-tail':'fox_tail','top-hat':'top_hat','dragon-tail':'dragon_tail'};
-document.querySelectorAll('.cosmetic-card[data-cosmetic]').forEach(card=>{
- card.addEventListener('click',()=>{
-  const item=cosmeticById.get(featuredAliases[card.dataset.cosmetic]||card.dataset.cosmetic);
-  if(!item)return;
-  const toggle=card.classList.contains('selected');
-  selectCosmetic(toggle?null:item,toggle?null:card);
- });
-});
-document.querySelectorAll('.catalog .item').forEach(card=>{
- card.tabIndex=0;card.setAttribute('role','button');
- const name=card.querySelector('.item-name')?.textContent?.trim()||'';
- const item=cosmeticByName.get(normName(name));
- if(!item){console.warn('Нет косметики в JSON для',name);return}
+const showcase=document.getElementById('cosmetic-showcase');
+const cardIcons={mustache:'🥸',santa_hat:'🎅',pixel_glasses:'🕶️',quiver:'🏹',cat_tail:'🐈',cat_ears:'🦊',backpack:'🎒',flower_crown:'💐',fox_tail:'🦊',guitar:'🎸',rain_cloud:'🌧️',cowboy_hat:'🤠',halo:'😇',horns:'😈',top_hat:'🎩',back_sword:'⚔️',wizard_hat:'🧙',crown:'👑',jester_hat:'🤡',dragon_tail:'🐉',viking_helmet:'🪖',angel_wings:'🪽',butterfly_wings:'🦋',demon_wings:'👿',cap:'🧢',headphones:'🎧',sunglasses:'🕶️',beanie:'🧶'};
+const priceOverrides={angel_wings:99,crown:69,fox_tail:79,top_hat:129,dragon_tail:0};
+const descriptions={angel_wings:'Украшение на спину',crown:'Королевский образ',fox_tail:'Украшение для образа',top_hat:'Классика на каждый день',dragon_tail:'Добавь немного характера',headphones:'Бесплатный предмет'};
+const slotLabels={head:'Украшение на голову',back:'Украшение на спину',tail:'Украшение для образа',face:'Украшение на лицо',float:'Эффект над головой'};
+const order=['mustache','santa_hat','pixel_glasses','quiver','cat_tail','cat_ears','backpack','flower_crown','fox_tail','guitar','rain_cloud','cowboy_hat','halo','horns','top_hat','back_sword','wizard_hat','crown','jester_hat','dragon_tail','viking_helmet','angel_wings','butterfly_wings','demon_wings','cap','headphones','sunglasses','beanie'];
+const orderedItems=[...cosmeticCatalog.items].sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
+for(const item of orderedItems){
+ const price=Object.prototype.hasOwnProperty.call(priceOverrides,item.id)?priceOverrides[item.id]:item.price;
+ const card=document.createElement('article');
+ card.className='cosmetic-card';card.dataset.cosmetic=item.id;card.tabIndex=0;card.setAttribute('role','button');
+ const priceEl=document.createElement('span');priceEl.className='cosmetic-price';priceEl.textContent=price===0?'Бесплатно':price+' ₽';
+ const art=document.createElement('div');art.className='cosmetic-art';art.textContent=cardIcons[item.id]||'✨';
+ const name=document.createElement('b');name.textContent=item.name;
+ const desc=document.createElement('small');desc.textContent=descriptions[item.id]||slotLabels[item.slot]||'Украшение для персонажа';
+ card.append(priceEl,art,name,desc);showcase.appendChild(card);
  const choose=()=>{const toggle=card.classList.contains('selected');selectCosmetic(toggle?null:item,toggle?null:card)};
  card.addEventListener('click',choose);
  card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose()}});
-});
+}
 
 const previewPanels = {
   home: '<h3>С возвращением!</h3><p>Твой следующий мир уже ждёт.</p><div class="preview-game"><div class="preview-tile"><span>▶</span><b>Быстрый запуск</b><small>Продолжить игру</small></div><div class="preview-tile"><span>☻</span><b>Твой персонаж</b><small>Скин и образ</small></div></div><span class="preview-action">Выбрать профиль</span>',
