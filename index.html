@@ -409,10 +409,88 @@ function applyCosmetic(viewer, type) {
   }
   skin.add(group);
 }
+const launcherMeshIds = {
+  crown: 'crown',
+  'top-hat': 'top_hat',
+  'cat-ears': 'cat_ears',
+  horns: 'horns',
+  backpack: 'backpack'
+};
+const launcherMeshCache = new Map();
+async function loadLauncherMesh(id) {
+  if (launcherMeshCache.has(id)) return launcherMeshCache.get(id);
+  const promise = (async () => {
+    const base = `./assets/cosmetics/${id}/`;
+    const response = await fetch(base + 'mesh.json');
+    if (!response.ok) throw new Error('Не удалось загрузить модель ' + id + ': ' + response.status);
+    const data = await response.json();
+    const texture = await new THREE.TextureLoader().loadAsync(base + (data.textures?.[0] || 'tex0.png'));
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const group = new THREE.Group();
+    for (const part of data.groups || []) {
+      const values = part.v || [];
+      const positions = [], normals = [], uvs = [], colors = [];
+      for (let i = 0; i + 10 < values.length; i += 11) {
+        positions.push(values[i], values[i + 1], values[i + 2]);
+        uvs.push(values[i + 3], values[i + 4]);
+        normals.push(values[i + 5], values[i + 6], values[i + 7]);
+        colors.push(values[i + 8], values[i + 9], values[i + 10]);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.setIndex(part.i || []);
+      const material = new THREE.MeshStandardMaterial({
+        map: texture, vertexColors: true, roughness: 0.82,
+        metalness: 0, side: THREE.DoubleSide
+      });
+      group.add(new THREE.Mesh(geometry, material));
+    }
+    return group;
+  })();
+  launcherMeshCache.set(id, promise);
+  try { return await promise; }
+  catch (error) { launcherMeshCache.delete(id); throw error; }
+}
+async function applyLauncherMesh(viewer, id) {
+  const skin = viewer?.playerObject?.skin;
+  if (!skin) return false;
+  const dataById = {
+    backpack: { bone: 'body', pivot: [0, 5, 2.1] },
+    cat_ears: { bone: 'head', pivot: [0, -8, 0] },
+    crown: { bone: 'head', pivot: [0, -6.9, 0] },
+    horns: { bone: 'head', pivot: [0, -7.5, -0.5] },
+    top_hat: { bone: 'head', pivot: [0, -8.3, 0] }
+  };
+  const meta = dataById[id];
+  if (!meta) return false;
+  const model = await loadLauncherMesh(id);
+  clearCosmetic(viewer);
+  const bone = skin[meta.bone] || skin.getObjectByName(meta.bone);
+  if (!bone) throw new Error('Не найдена кость ' + meta.bone);
+  const wrapper = new THREE.Group();
+  wrapper.name = 'hytpotchi-cosmetic';
+  wrapper.position.set(...meta.pivot);
+  wrapper.add(model.clone(true));
+  bone.add(wrapper);
+  return true;
+}
 function selectCosmetic(type, card) {
   document.querySelectorAll('.cosmetic-card,.catalog .item').forEach(el => el.classList.remove('selected'));
   if (card) card.classList.add('selected');
-  if (cosmeticViewer) applyCosmetic(cosmeticViewer, type);
+  if (cosmeticViewer) {
+    const meshId = launcherMeshIds[type];
+    if (meshId) {
+      applyLauncherMesh(cosmeticViewer, meshId).catch(error => {
+        console.error('Hytpotchi launcher cosmetic error:', error);
+        applyCosmetic(cosmeticViewer, type);
+      });
+    } else {
+      applyCosmetic(cosmeticViewer, type);
+    }
+  }
   if (equippedLabel) equippedLabel.textContent = type ? 'Надето: ' + (cosmeticNames[type] || type) : 'Ничего не надето';
 }
 
@@ -497,9 +575,13 @@ document.querySelectorAll('.catalog .item').forEach(item => {
   let type = 'crown';
   if (/крылья/i.test(name)) type = 'wings';
   else if (/хвост/i.test(name)) type = /лисий|кошачий/i.test(name) ? 'fox-tail' : 'dragon-tail';
+  else if (/рюкзак/i.test(name)) type = 'backpack';
+  else if (/ушки|уши/i.test(name)) type = 'cat-ears';
+  else if (/рожки|рога/i.test(name)) type = 'horns';
   else if (/наушники/i.test(name)) type = 'headphones';
-  else if (/цилиндр|шляпа|шап|кепка|колпак|бини|венок|корона|рога|ушки|шлем/i.test(name)) type = 'top-hat';
-  else if (/рюкзак|колчан|гитара|меч/i.test(name)) type = 'wings';
+  else if (/цилиндр|шляпа|шап|кепка|колпак|бини|венок/i.test(name)) type = 'top-hat';
+  else if (/корона/i.test(name)) type = 'crown';
+  else if (/колчан|гитара|меч/i.test(name)) type = 'backpack';
   item.addEventListener('click', () => selectCosmetic(type, item));
   item.addEventListener('keydown', event => {
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCosmetic(type, item); }
