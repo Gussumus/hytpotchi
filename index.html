@@ -208,137 +208,42 @@ import * as skinview3d from 'https://cdn.jsdelivr.net/npm/skinview3d@3.4.2/+esm'
 const host = document.getElementById('avatar');
 const hint = document.getElementById('avatar-hint');
 const canvas = document.createElement('canvas');
-canvas.setAttribute('aria-label', '3D-персонаж Hytpotchi');
-
-let viewer;
-let raf = 0;
-let waveUntil = 0;
-let pointerX = 0;
-let pointerY = 0;
-let lookX = 0;
-let lookY = 0;
-let glanceX = 0;
-let glanceY = 0;
-let nextGlance = 0;
-let nextBlink = 0;
-let blinkStarted = 0;
-
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-const smooth = (a, b, x) => {
-  const t = clamp((x - a) / (b - a), 0, 1);
-  return t * t * (3 - 2 * t);
-};
 
 try {
-  viewer = new skinview3d.SkinViewer({
+  const viewer = new skinview3d.SkinViewer({
     canvas,
     width: 460,
     height: 470,
-    skin: './skin.png',
-    model: 'slim',
-    fov: 34,
-    zoom: 0.86
+    skin: './skin.png'
   });
 
   host.prepend(canvas);
   viewer.controls.enableZoom = false;
   viewer.controls.enablePan = false;
   viewer.controls.enableRotate = false;
-  viewer.autoRotate = false;
-  viewer.camera.position.set(24, 16, 52);
-  viewer.playerObject.rotation.y = -0.10;
-  viewer.globalLight.intensity = 2.5;
-  viewer.cameraLight.intensity = 0.7;
+  viewer.camera.position.set(28, 18, 48);
+  viewer.playerObject.rotation.y = -0.18;
 
   await viewer.loadSkin('./skin.png', { model: 'slim' });
   hint?.remove();
 
-  // Спокойная idle-анимация: лёгкое дыхание, перенос веса и редкий взмах левой рукой.
-  viewer.animation = new skinview3d.FunctionAnimation((player, t) => {
-    const now = performance.now() / 1000;
-    const skin = player.skin;
-    const cycle = t % 19;
-    const automaticWave = smooth(8.2, 8.85, cycle) * (1 - smooth(10.7, 11.35, cycle));
-    const requestedWave = now < waveUntil ? 1 : 0;
-    const wave = Math.max(automaticWave, requestedWave);
-    const waveTime = requestedWave ? now : cycle - 8.85;
+  // Персонаж неподвижно стоит. Раз в 14 секунд плавно поднимает левую руку
+  // и несколько раз слегка покачивает ею, затем возвращает руку вниз.
+  viewer.animation = new skinview3d.FunctionAnimation((player, time) => {
+    const period = 14;
+    const phase = time % period;
+    const fadeIn = Math.max(0, Math.min(1, (phase - 4) / 0.65));
+    const fadeOut = Math.max(0, Math.min(1, (7.3 - phase) / 0.65));
+    const smoothIn = fadeIn * fadeIn * (3 - 2 * fadeIn);
+    const smoothOut = fadeOut * fadeOut * (3 - 2 * fadeOut);
+    const raised = Math.min(smoothIn, smoothOut);
 
-    // Дыхание и почти незаметное покачивание корпуса.
-    skin.body.position.y = -6 + Math.sin(t * 1.25) * 0.13;
-    skin.body.rotation.z = Math.sin(t * 0.62) * 0.012;
-    player.position.y = Math.sin(t * 1.25) * 0.10;
-    player.rotation.y = -0.10 + Math.sin(t * 0.42) * 0.025;
-
-    // Руки расслаблены, двигаются совсем немного.
-    skin.rightArm.rotation.x = Math.sin(t * 1.25 + 0.7) * 0.025;
-    skin.rightArm.rotation.z = -0.045 + Math.sin(t * 0.8) * 0.012;
-    skin.leftArm.rotation.x = -2.78 * wave;
-    skin.leftArm.rotation.z = 0.045 + wave * (0.18 + Math.sin(waveTime * 10) * 0.30);
-
-    // Ноги остаются на месте, только лёгкий перенос веса.
-    skin.leftLeg.rotation.x = Math.sin(t * 0.8) * 0.012;
-    skin.rightLeg.rotation.x = -Math.sin(t * 0.8) * 0.012;
+    player.skin.leftArm.rotation.x = Math.PI * 0.88 * raised;
+    player.skin.leftArm.rotation.z = Math.sin(time * 9) * 0.22 * raised;
   });
-
-  const triggerWave = () => {
-    waveUntil = performance.now() / 1000 + 2.8;
-  };
-
-  document.querySelectorAll('.hero a, .nav-download').forEach(button => {
-    button.addEventListener('pointerenter', triggerWave);
-    button.addEventListener('click', triggerWave);
-  });
-
-  const updatePointer = event => {
-    const rect = host.getBoundingClientRect();
-    pointerX = clamp(((event.clientX - rect.left) / rect.width - 0.5) * 2, -1, 1);
-    pointerY = clamp(((event.clientY - rect.top) / rect.height - 0.5) * 2, -1, 1);
-  };
-  window.addEventListener('pointermove', event => {
-    const rect = host.getBoundingClientRect();
-    if (event.clientX >= rect.left && event.clientX <= rect.right &&
-        event.clientY >= rect.top && event.clientY <= rect.bottom) {
-      updatePointer(event);
-    } else {
-      pointerX = 0;
-      pointerY = 0;
-    }
-  });
-
-  const animateDetails = () => {
-    const now = performance.now() / 1000;
-    const head = viewer.playerObject.skin.head;
-
-    // Персонаж плавно переводит взгляд вслед за курсором и иногда смотрит по сторонам.
-    if (now > nextGlance) {
-      glanceX = (Math.random() - 0.5) * 0.20;
-      glanceY = (Math.random() - 0.5) * 0.10;
-      nextGlance = now + 2.8 + Math.random() * 3.8;
-    }
-    lookX += (pointerX * 0.30 + glanceX - lookX) * 0.045;
-    lookY += (pointerY * 0.16 + glanceY - lookY) * 0.045;
-    head.rotation.y = lookX;
-    head.rotation.x = lookY;
-
-    // Короткое моргание через лёгкое сжатие головы по вертикали.
-    if (now > nextBlink) {
-      blinkStarted = now;
-      nextBlink = now + 3.2 + Math.random() * 3.5;
-    }
-    const blinkTime = now - blinkStarted;
-    const blink = blinkTime >= 0 && blinkTime < 0.16
-      ? Math.sin((blinkTime / 0.16) * Math.PI)
-      : 0;
-    head.scale.y = 1 - blink * 0.075;
-
-    raf = requestAnimationFrame(animateDetails);
-  };
-  nextGlance = performance.now() / 1000 + 2;
-  nextBlink = performance.now() / 1000 + 3.5;
-  animateDetails();
 } catch (error) {
   console.error('Hytpotchi avatar error:', error);
-  if (hint) hint.textContent = 'Не удалось загрузить 3D-персонажа. Проверь подключение и skin.png.';
+  if (hint) hint.textContent = 'Не удалось загрузить персонажа (skin.png).';
 }
 
 const io = new IntersectionObserver(entries => entries.forEach(entry => {
@@ -348,9 +253,4 @@ const io = new IntersectionObserver(entries => entries.forEach(entry => {
   }
 }), { threshold: 0.08 });
 document.querySelectorAll('.reveal').forEach(el => io.observe(el));
-
-window.addEventListener('pagehide', () => {
-  cancelAnimationFrame(raf);
-  viewer?.dispose();
-});
 </script></body></html>
