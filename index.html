@@ -227,59 +227,39 @@ try {
   await viewer.loadSkin('./skin.png', { model: 'slim' });
   hint?.remove();
 
-  // Голова следит за курсором по всему окну, а не только над canvas.
-  let targetHeadY = 0;
-  let targetHeadX = 0;
-  let currentHeadY = 0;
-  let currentHeadX = 0;
+  // Берём именно сустав головы из SkinObject. Не запускаем отдельный RAF:
+  // слежение обновляется напрямую при движении мыши и не ломает рендер.
+  const headJoint = viewer.playerObject.skin?.head ??
+    viewer.playerObject.skin?.getObjectByName('head');
 
   window.addEventListener('pointermove', event => {
-    targetHeadY = ((event.clientX / window.innerWidth) - 0.5) * 0.9;
-    targetHeadX = ((event.clientY / window.innerHeight) - 0.5) * 0.42;
+    if (!headJoint?.rotation) return;
+    const x = (event.clientX / window.innerWidth) - 0.5;
+    const y = (event.clientY / window.innerHeight) - 0.5;
+    headJoint.rotation.y = x * 0.85;
+    headJoint.rotation.x = y * 0.35;
   }, { passive: true });
 
   window.addEventListener('blur', () => {
-    targetHeadY = 0;
-    targetHeadX = 0;
+    if (!headJoint?.rotation) return;
+    headJoint.rotation.x = 0;
+    headJoint.rotation.y = 0;
   });
 
-  const followCursor = () => {
-    currentHeadY += (targetHeadY - currentHeadY) * 0.055;
-    currentHeadX += (targetHeadX - currentHeadX) * 0.055;
-    viewer.playerObject.skin.head.rotation.y = currentHeadY;
-    viewer.playerObject.skin.head.rotation.x = currentHeadX;
-    requestAnimationFrame(followCursor);
+  // Чётко видимый цикл: персонаж спокойно стоит, затем машет левой рукой.
+  // Используем штатные анимации библиотеки, а не неподдерживаемые callback overlays.
+  const setIdle = () => {
+    viewer.animation = new skinview3d.IdleAnimation();
+    viewer.animation.speed = 1;
   };
-  followCursor();
+  setIdle();
 
-  // Базовая idle-анимация skinview3d + отдельный процедурный взмах.
-  // Так idle и приветствие не перезаписывают друг друга.
-  viewer.animation = new skinview3d.IdleAnimation();
-  viewer.animation.speed = 1;
-
-  viewer.animation.addAnimation((player, progress) => {
-    const phase = progress % 11;
-    const startWave = 3.0;
-    const waveLength = 2.5;
-    const local = phase - startWave;
-    let wave = 0;
-
-    if (local >= 0 && local <= waveLength) {
-      const fadeIn = Math.min(1, local / 0.38);
-      const fadeOut = Math.min(1, (waveLength - local) / 0.42);
-      const fade = Math.max(0, Math.min(fadeIn, fadeOut));
-      wave = fade * fade * (3 - 2 * fade);
-    }
-
-    // Ненавязчивое дыхание и перенос веса, без ходьбы и вращения на месте.
-    player.position.y = Math.sin(progress * 1.8) * 0.12;
-    player.skin.body.rotation.z = Math.sin(progress * 1.15) * 0.018;
-
-    // Левая рука плавно поднимается, затем делает несколько взмахов.
-    player.skin.leftArm.rotation.x = 1.18 * wave;
-    player.skin.leftArm.rotation.z =
-      0.045 + Math.sin(progress * 10.5) * 0.34 * wave;
-  });
+  const waveEvery = 12000;
+  window.setInterval(() => {
+    viewer.animation = new skinview3d.WaveAnimation('left');
+    viewer.animation.speed = 1.15;
+    window.setTimeout(setIdle, 1900);
+  }, waveEvery);
 } catch (error) {
   console.error('Hytpotchi avatar error:', error);
   if (hint) hint.textContent = 'Не удалось загрузить персонажа (skin.png).';
