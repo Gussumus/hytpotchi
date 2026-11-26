@@ -5,6 +5,13 @@
 <title>Hytpotchi — Minecraft начинается здесь</title>
 <meta name="description" content="Hytpotchi — бесплатный лаунчер Minecraft. Версии, моды, модпаки, скины и игра с друзьями.">
 <meta name="theme-color" content="#101713">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.module.js"
+  }
+}
+</script>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -300,8 +307,8 @@ a{color:inherit;text-decoration:none}.wrap{width:min(1160px,calc(100% - 44px));m
 <section class="section reveal"><div class="section-head"><div><div class="kicker">Поддержка</div><h2>Остались вопросы?</h2></div><p>Напиши нам — поможем разобраться с лаунчером, аккаунтом или покупками.</p></div><div class="card"><p>Почта: <a href="mailto:akiom31@gmail.com">akiom31@gmail.com</a></p><p class="legal">Продавец — самозанятый, плательщик налога на профессиональный доход. По вопросам возврата при оплате цифрового товара обращайтесь на почту с ником и датой платежа. Условия возврата рассматриваются индивидуально в соответствии с применимыми правилами.</p></div></section>
 <footer class="footer"><div>© Hytpotchi</div><span><a href="https://github.com/Gussumus/hytpotchi">GitHub</a> · <a href="https://github.com/Gussumus/hytpotchi/releases/download/v1.5.0/Hytpotchi_1.5.0_x64-setup.exe">Скачать</a> · <a href="mailto:akiom31@gmail.com">Поддержка</a></span><p>Hytpotchi не связан с Mojang Studios и Microsoft. Minecraft — товарный знак Mojang Synergies AB.</p></footer></div>
 <script type="module">
-import * as skinview3d from 'https://cdn.jsdelivr.net/npm/skinview3d@3.4.2/+esm';
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.156.1/+esm';
+import * as skinview3d from 'https://cdn.jsdelivr.net/npm/skinview3d@3.4.2/libs/skinview3d.js';
+import * as THREE from 'three';
 
 const host = document.getElementById('avatar');
 const cosmeticHost = document.getElementById('cosmetic-avatar');
