@@ -335,14 +335,16 @@ function clearCosmetic(viewer) {
   if (!root) return;
   const old = root.getObjectByName('hytpotchi-cosmetic');
   if (old) {
-    old.traverse(object => {
-      if (object.geometry) object.geometry.dispose();
-      if (object.material) {
-        const materials = Array.isArray(object.material) ? object.material : [object.material];
-        materials.forEach(material => material.dispose());
-      }
-    });
-    root.remove(old);
+    if (!old.userData.sharedAssets) {
+      old.traverse(object => {
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) {
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach(material => material.dispose());
+        }
+      });
+    }
+    old.parent?.remove(old);
   }
 }
 function applyCosmetic(viewer, type) {
@@ -472,6 +474,7 @@ async function applyLauncherMesh(viewer, id) {
   if (!bone) throw new Error('Не найдена кость ' + meta.bone);
   const wrapper = new THREE.Group();
   wrapper.name = 'hytpotchi-cosmetic';
+  wrapper.userData.sharedAssets = true;
   wrapper.position.set(...meta.pivot);
   wrapper.add(model.clone(true));
   bone.add(wrapper);
