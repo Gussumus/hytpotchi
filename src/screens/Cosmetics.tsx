@@ -299,11 +299,6 @@ export function Cosmetics() {
               {!wearing && replaces.length > 0 && (
                 <span className="muted small">Вместо: {replaces.map((c) => c.name).join(', ')} — на одном месте</span>
               )}
-              {current.credit && (
-                <span className="muted small shop-credit">
-                  3D-модель «{current.credit.title ?? current.name}» — {current.credit.author}, {current.credit.license}
-                </span>
-              )}
             </div>
           ) : (
             <p className="muted small">Выберите предмет, чтобы примерить</p>
